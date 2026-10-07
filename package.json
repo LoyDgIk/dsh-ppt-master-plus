@@ -46,11 +46,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pn1024/dsh-ppt-master-plus.git"
+    "url": "git+https://github.com/LoyDgIk/dsh-ppt-master-plus.git"
   },
-  "homepage": "https://github.com/pn1024/dsh-ppt-master-plus#readme",
+  "homepage": "https://github.com/LoyDgIk/dsh-ppt-master-plus#readme",
   "bugs": {
-    "url": "https://github.com/pn1024/dsh-ppt-master-plus/issues"
+    "url": "https://github.com/LoyDgIk/dsh-ppt-master-plus/issues"
   },
   "dependencies": {},
   "dsh": {
