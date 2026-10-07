@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"
+  data-pptx-master="academic_defense_body_master" data-pptx-master-name="Academic Defense Body"
+  data-pptx-layout="outline" data-pptx-layout-name="Outline">
+  <rect id="master-background" x="0" y="0" width="1280" height="720" fill="#FFFFFF"
+    data-pptx-layer="master" data-pptx-editable="false"/>
+  <line id="master-header-rule" x1="48" y1="64" x2="1232" y2="64" stroke="#E2E8F0"
+    stroke-width="1" data-pptx-layer="master" data-pptx-editable="false"/>
+  <line id="master-footer-rule" x1="48" y1="664" x2="1232" y2="664" stroke="#E2E8F0"
+    stroke-width="1" data-pptx-layer="master" data-pptx-editable="false"/>
+  <g id="outline-title-slot" data-pptx-placeholder="title"
+    data-pptx-bounds="48 88 1184 56">
+    <text id="outline-title-carrier" data-pptx-carrier="true"
+      x="48" y="130" fill="#1E293B" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="28" font-weight="700">{{PAGE_TITLE}}</text>
+  </g>
+  <line id="outline-rule-1" x1="48" y1="210" x2="1232" y2="210" stroke="#F1F5F9" stroke-width="1"
+    data-pptx-layer="layout" data-pptx-editable="false"/>
+  <line id="outline-rule-2" x1="48" y1="288" x2="1232" y2="288" stroke="#F1F5F9" stroke-width="1"
+    data-pptx-layer="layout" data-pptx-editable="false"/>
+  <line id="outline-rule-3" x1="48" y1="366" x2="1232" y2="366" stroke="#F1F5F9" stroke-width="1"
+    data-pptx-layer="layout" data-pptx-editable="false"/>
+  <line id="outline-rule-4" x1="48" y1="444" x2="1232" y2="444" stroke="#F1F5F9" stroke-width="1"
+    data-pptx-layer="layout" data-pptx-editable="false"/>
+  <line id="outline-rule-5" x1="48" y1="522" x2="1232" y2="522" stroke="#F1F5F9" stroke-width="1"
+    data-pptx-layer="layout" data-pptx-editable="false"/>
+  <text id="outline-num-1" x="48" y="202" fill="#94A3B8" data-pptx-layer="layout" data-pptx-editable="false"
+    font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">01</text>
+  <text id="outline-num-2" x="48" y="280" fill="#94A3B8" data-pptx-layer="layout" data-pptx-editable="false"
+    font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">02</text>
+  <text id="outline-num-3" x="48" y="358" fill="#94A3B8" data-pptx-layer="layout" data-pptx-editable="false"
+    font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">03</text>
+  <text id="outline-num-4" x="48" y="436" fill="#94A3B8" data-pptx-layer="layout" data-pptx-editable="false"
+    font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">04</text>
+  <text id="outline-num-5" x="48" y="514" fill="#94A3B8" data-pptx-layer="layout" data-pptx-editable="false"
+    font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">05</text>
+  <text id="outline-num-6" x="48" y="592" fill="#94A3B8" data-pptx-layer="layout" data-pptx-editable="false"
+    font-family="Arial, Microsoft YaHei, sans-serif" font-size="16" font-weight="700">06</text>
+  <g id="outline-item-1-slot" data-pptx-placeholder="body" data-pptx-idx="1"
+    data-pptx-bounds="112 170 1120 36">
+    <text id="outline-item-1-carrier" data-pptx-carrier="true"
+      x="112" y="196" fill="#475569" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="20">{{ITEM_1}}</text>
+  </g>
+  <g id="outline-item-2-slot" data-pptx-placeholder="body" data-pptx-idx="2"
+    data-pptx-bounds="112 248 1120 36">
+    <text id="outline-item-2-carrier" data-pptx-carrier="true"
+      x="112" y="274" fill="#475569" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="20">{{ITEM_2}}</text>
+  </g>
+  <g id="outline-item-3-slot" data-pptx-placeholder="body" data-pptx-idx="3"
+    data-pptx-bounds="112 326 1120 36">
+    <text id="outline-item-3-carrier" data-pptx-carrier="true"
+      x="112" y="352" fill="#475569" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="20">{{ITEM_3}}</text>
+  </g>
+  <g id="outline-item-4-slot" data-pptx-placeholder="body" data-pptx-idx="4"
+    data-pptx-bounds="112 404 1120 36">
+    <text id="outline-item-4-carrier" data-pptx-carrier="true"
+      x="112" y="430" fill="#475569" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="20">{{ITEM_4}}</text>
+  </g>
+  <g id="outline-item-5-slot" data-pptx-placeholder="body" data-pptx-idx="5"
+    data-pptx-bounds="112 482 1120 36">
+    <text id="outline-item-5-carrier" data-pptx-carrier="true"
+      x="112" y="508" fill="#475569" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="20">{{ITEM_5}}</text>
+  </g>
+  <g id="outline-item-6-slot" data-pptx-placeholder="body" data-pptx-idx="6"
+    data-pptx-bounds="112 560 1120 36">
+    <text id="outline-item-6-carrier" data-pptx-carrier="true"
+      x="112" y="586" fill="#475569" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="20">{{ITEM_6}}</text>
+  </g>
+  <g id="outline-footer-slot" data-pptx-placeholder="footer" data-pptx-idx="7"
+    data-pptx-bounds="48 676 900 32">
+    <text id="outline-footer-carrier" data-pptx-carrier="true"
+      x="48" y="698" fill="#94A3B8" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="12">{{FOOTER_NOTE}}</text>
+  </g>
+  <g id="outline-pagenum-slot" data-pptx-placeholder="slide-number" data-pptx-idx="8"
+    data-pptx-bounds="1112 676 120 32">
+    <text id="outline-pagenum-carrier" data-pptx-carrier="true"
+      x="1232" y="698" text-anchor="end" fill="#94A3B8"
+      font-family="Arial, Microsoft YaHei, sans-serif" font-size="12">{{PAGE_NUM}}</text>
+  </g>
+</svg>

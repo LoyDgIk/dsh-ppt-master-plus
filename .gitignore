@@ -1,0 +1,34 @@
+# Dependencies (this plugin has none, but installs may create them)
+node_modules/
+.pnpm-store/
+
+# Test / build noise
+coverage/
+*.tsbuildinfo
+
+# Python bytecode from the SCI skill's scripts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local secrets. The MinerU token belongs in the environment, never in the repo.
+.env
+.env.*
+!.env.example
+
+# Local scratch: rendered previews, deck projects, downloaded archives.
+# Never commit generated slide output or preview SVGs.
+previews/
+*.pptx
+*.zip
+projects/
+
+# upstream.lock.json is deliberately NOT ignored: the pinned commit is part of
+# the contract and must be reviewable in the diff of every sync.

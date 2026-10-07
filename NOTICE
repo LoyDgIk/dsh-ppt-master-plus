@@ -1,0 +1,102 @@
+# Notices and third-party attribution
+
+`dsh-ppt-master-plus` is MIT licensed (see [`LICENSE`](./LICENSE)). It contains
+no third-party source code copied into this repository. What follows records
+what it depends on, what it was modelled on, and under which terms.
+
+## 1. Upstream: ppt-master
+
+**Not contained in this repository.** Upstream is referenced as a git submodule
+at `vendor/ppt-master`, pinned by [`upstream.lock.json`](./upstream.lock.json).
+
+| | |
+| --- | --- |
+| Project | PPT Master |
+| Repository | https://github.com/hugohe3/ppt-master |
+| Author | Hugo He |
+| Licence | MIT |
+| Pinned commit | see `upstream.lock.json` |
+
+Because the submodule is a separate checkout, upstream's own `LICENSE`,
+`THIRD_PARTY_NOTICES` and asset attributions apply to it directly and are not
+duplicated here. This plugin does not modify, relicense, or redistribute
+upstream's files as part of its own package contents.
+
+Anyone installing this plugin obtains upstream under upstream's own terms. The
+licence text is present in the checkout at `vendor/ppt-master/LICENSE`.
+
+## 2. Design references
+
+These projects informed the design. **No code was copied from them.** They are
+recorded because the architecture answers problems they raised, and because that
+provenance is the honest way to credit it.
+
+### `pn1024/dsh-ppt-master`
+
+https://github.com/pn1024/dsh-ppt-master — MIT.
+
+A DSH plugin that packages ppt-master's skill. It demonstrated the
+`ctx.skills.registerProvider()` mechanism and the `cordis.patch.yml` bundle
+shape that this plugin's entry point follows. It **vendors** a full copy of
+ppt-master under `skills/ppt-master/`; the difference here is deliberate — a
+vendored copy cannot be fast-forwarded from upstream without a manual merge,
+which is the problem this plugin exists to solve.
+
+### `hongyi652/ppt-master-sci-fork`
+
+https://github.com/hongyi652/ppt-master-sci-fork — MIT; original project
+copyright Hugo He, fork changes copyright hongyi.
+
+A fork of ppt-master adding MinerU document parsing and formula handling for
+scientific PDFs. It is the **functional reference** for this plugin's SCI
+skill: the decision to ingest research PDFs through MinerU rather than a text
+layer, and the extraction of LaTeX into a reviewable manifest, both come from
+what that fork proved out.
+
+It implements those features by **patching files inside ppt-master**
+(`skills/ppt-master/scripts/source_to_md/mineru_to_md.py`,
+`scripts/extract_formulas.py`, `scripts/formula_display_policy.py`,
+`scripts/latex_to_svg.py`, and a layout under `templates/layouts/`). That
+approach cannot track upstream, because every upstream release is a merge
+conflict.
+
+This plugin reimplements the equivalent capability as an **independent skill**
+outside the upstream tree, and deliberately diverges where the fork is now out
+of date with upstream's own later work — see §3.
+
+### `elvisw/ppt-master` references
+
+Early documentation of the ppt-master lineage was consulted for historical
+context. No content was carried across.
+
+## 3. Where this plugin deliberately differs from the sci-fork
+
+Stated here so the divergence is a recorded decision rather than an omission.
+
+| Area | sci-fork | This plugin | Why |
+| --- | --- | --- | --- |
+| Upstream relationship | Fork; edits upstream files | Git submodule; edits nothing | Upstream releases stay a fast-forward |
+| Delivery | One patched tree | Upstream + an independent skill | The overlay survives upstream redesigns |
+| Formulas in slides | Renders LaTeX to SVG images | Routes to upstream's **native** formula markers (editable Office Math) | Upstream's `references/native-formula.md` forbids the picture branch: "Never substitute a PNG, flatten structural math into ordinary text, hand-write OMML, or leave raw LaTeX visible" |
+| LaTeX → SVG | Core slide pipeline | Optional **preview only**, explicitly not a slide asset | Same rule; previews are a QA aid, not output |
+| Formula sizing | Patches upstream's `svg_quality_checker.py` | Guidance in the skill's own references | Editing the checker would modify upstream |
+| Academic layouts | Added under `templates/layouts/` inside the skill | Shipped as an **unregistered external workspace root** | Upstream supports `explicit` roots; registration would write into upstream |
+
+## 4. Optional third-party tools
+
+Not bundled, not required, invoked only when present.
+
+| Tool | Used for | Licence / terms |
+| --- | --- | --- |
+| [MinerU](https://github.com/opendatalab/MinerU) | Scientific document parsing, via its hosted API | AGPL-3.0 (upstream project). **This plugin calls the MinerU HTTP API at `mineru.net`; it does not bundle, link, or redistribute MinerU code.** Using the API is subject to MinerU's own service terms, and requires a token the user supplies. |
+| A TeX distribution (MiKTeX / TeX Live) and `dvisvgm` | Optional formula preview rendering | Respective upstream licences; not bundled |
+
+## 5. Assets
+
+The academic layout pack under
+`skills/ppt-master-sci/assets/template-library/` is original work authored for
+this plugin. It contains no upstream template files and no third-party imagery,
+fonts or icons: every element is a plain SVG shape or a text placeholder.
+
+Upstream's own icon, sound and template libraries live inside the submodule and
+are covered by upstream's notices.

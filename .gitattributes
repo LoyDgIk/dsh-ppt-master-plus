@@ -1,0 +1,20 @@
+# Normalize line endings across platforms.
+#
+# The Python scripts under skills/ppt-master-sci/scripts/ carry shebangs and are
+# meant to be runnable on Unix, so they must keep LF. Forcing LF repo-wide also
+# stops CRLF churn from showing up as spurious diffs in Markdown and JSON.
+* text=auto eol=lf
+
+# Binary formats must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.wav binary
+*.mp3 binary
+*.pptx binary
+*.docx binary
+*.xlsx binary
+*.zip binary
+*.pdf binary

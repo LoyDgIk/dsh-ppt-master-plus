@@ -1,0 +1,77 @@
+{
+  "name": "dsh-ppt-master-plus",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin for ppt-master: references upstream hugohe3/ppt-master as a git submodule (never vendored, never patched) and layers independent scientific/academic skills on top.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-ppt-master-plus": "./scripts/cli.mjs"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "skills",
+    "scripts",
+    "docs",
+    "upstream.lock.json",
+    ".env.example",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "skill",
+    "ppt",
+    "pptx",
+    "presentation",
+    "ppt-master",
+    "scientific",
+    "academic",
+    "mineru",
+    "formula",
+    "幻灯片",
+    "演示文稿",
+    "论文汇报"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pn1024/dsh-ppt-master-plus.git"
+  },
+  "homepage": "https://github.com/pn1024/dsh-ppt-master-plus#readme",
+  "bugs": {
+    "url": "https://github.com/pn1024/dsh-ppt-master-plus/issues"
+  },
+  "dependencies": {},
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.1.1-rc.1"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "upstream:init": "node scripts/upstream.mjs init",
+    "upstream:sync": "node scripts/upstream.mjs sync",
+    "upstream:check": "node scripts/upstream.mjs check",
+    "upstream:verify": "node scripts/upstream.mjs verify",
+    "doctor": "node scripts/cli.mjs doctor",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "prepare": "node scripts/upstream.mjs init --soft"
+  },
+  "packageManager": "pnpm@11.7.0"
+}

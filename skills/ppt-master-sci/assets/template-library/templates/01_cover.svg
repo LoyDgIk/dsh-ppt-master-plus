@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"
+  data-pptx-master="academic_defense_cover_master" data-pptx-master-name="Academic Defense Cover"
+  data-pptx-layout="cover" data-pptx-layout-name="Cover">
+  <rect id="master-background" x="0" y="0" width="1280" height="720" fill="#1E293B"
+    data-pptx-layer="master" data-pptx-editable="false"/>
+  <rect id="cover-accent" x="96" y="196" width="72" height="5" rx="2.5" fill="#64748B"
+    data-pptx-layer="layout" data-pptx-editable="false"/>
+  <g id="cover-title-slot" data-pptx-placeholder="title"
+    data-pptx-bounds="96 236 1088 132">
+    <text id="cover-title-carrier" data-pptx-carrier="true"
+      x="96" y="300" fill="#F8FAFC" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="46" font-weight="700">{{TITLE}}</text>
+  </g>
+  <g id="cover-subtitle-slot" data-pptx-placeholder="subtitle" data-pptx-idx="1"
+    data-pptx-bounds="96 386 936 44">
+    <text id="cover-subtitle-carrier" data-pptx-carrier="true"
+      x="96" y="418" fill="#CBD5E1" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="21">{{SUBTITLE}}</text>
+  </g>
+  <g id="cover-author-slot" data-pptx-placeholder="body" data-pptx-idx="2"
+    data-pptx-bounds="96 520 624 34">
+    <text id="cover-author-carrier" data-pptx-carrier="true"
+      x="96" y="544" fill="#E2E8F0" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="19" font-weight="700">{{AUTHOR}}</text>
+  </g>
+  <g id="cover-affiliation-slot" data-pptx-placeholder="body" data-pptx-idx="3"
+    data-pptx-bounds="96 556 720 32">
+    <text id="cover-affiliation-carrier" data-pptx-carrier="true"
+      x="96" y="578" fill="#94A3B8" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="15">{{AFFILIATION}}</text>
+  </g>
+  <line id="cover-date-rule" x1="96" y1="622" x2="240" y2="622" stroke="#475569"
+    stroke-width="1" data-pptx-layer="layout" data-pptx-editable="false"/>
+  <g id="cover-date-slot" data-pptx-placeholder="date" data-pptx-idx="4"
+    data-pptx-bounds="96 634 400 32">
+    <text id="cover-date-carrier" data-pptx-carrier="true"
+      x="96" y="656" fill="#64748B" font-family="Arial, Microsoft YaHei, sans-serif"
+      font-size="15">{{DATE}}</text>
+  </g>
+</svg>

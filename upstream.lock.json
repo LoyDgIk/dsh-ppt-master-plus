@@ -1,0 +1,11 @@
+{
+  "schema": "dsh-ppt-master-plus.upstream-lock.v1",
+  "upstream": {
+    "repo": "https://github.com/hugohe3/ppt-master.git",
+    "ref": "main",
+    "commit": "440557b8dc7c7257b69c04a0b014d5c50a78e6cb",
+    "commitDate": "2026-10-07T10:11:56Z"
+  },
+  "submodulePath": "vendor/ppt-master",
+  "note": "Pinned by `npm run upstream:sync`. The submodule checkout is read-only for this plugin: nothing under vendor/ppt-master may be edited, generated into, or committed from here. `npm run upstream:verify` enforces that."
+}

@@ -1,0 +1,19 @@
+# dsh-ppt-master-plus bundle layer.
+#
+# Mounts the plugin entry (`index.js` via the package root export), which
+# registers a single skills provider. That provider projects TWO disjoint
+# roots onto `ctx.skills`:
+#
+#   1. vendor/ppt-master/skills/   — upstream hugohe3/ppt-master, a git
+#                                    submodule. Registered VERBATIM, marked
+#                                    `source: upstream`. Never edited.
+#   2. skills/                     — this plugin's own skills (the SCI
+#                                    layer). Registered with a runtime
+#                                    preamble that bridges paths into the
+#                                    upstream checkout.
+#
+# The split is the whole point: upstream stays a pristine git checkout, so
+# `git submodule update --remote` never conflicts with our additions.
+- insert:
+    - id: dsh-ppt-master-plus
+      name: dsh-ppt-master-plus
