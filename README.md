@@ -10,7 +10,8 @@ vendored copy and not a fork.
 
 ```text
 dsh-ppt-master-plus/
-├── index.js                 DSH entry: one skills provider, two roots
+├── index.js                 DSH entry: skills provider + MinerU credential bridge
+├── dsh/client.js            browser half: the MinerU API key settings page
 ├── cordis.patch.yml         bundle patch that mounts the plugin
 ├── upstream.lock.json       the pinned upstream commit
 ├── .gitmodules              → vendor/ppt-master
@@ -23,7 +24,7 @@ dsh-ppt-master-plus/
 ├── scripts/
 │   ├── upstream.mjs         init / check / sync / verify / status
 │   └── cli.mjs              doctor / skills
-└── tests/                   75 tests, including the "upstream is pristine" invariants
+└── tests/                   91 tests, including the "upstream is pristine" invariants
 ```
 
 ## Why a submodule, and why that matters
@@ -223,10 +224,44 @@ derived from the brief → `neutral-default`. Nothing in the archetype catalog
 names a colour, and there is a stated test for that: swap the profile and every
 archetype must still be selectable.
 
+## Configuration
+
+One setting: the MinerU API key. Open **插件 → dsh-ppt-master-plus** and paste it.
+
+| | |
+| --- | --- |
+| **Endpoint** | `https://mineru.net/api/v4` — official MinerU cloud only. No provider picker, no self-hosted base URL. |
+| **Storage** | DSH's credential service, under the reference `MINERU_API_TOKEN`. Not a file, and never read back into the page. |
+| **Delivery** | The host half republishes it as `DSH_MINERU_API_TOKEN` on every model shell call, so `mineru_ingest.py` picks it up with no shell setup. |
+
+### Why there is a host half as well as a page
+
+Storing a key that nothing reads is decoration. `mineru_ingest.py` runs as an
+ordinary child process and sees only its environment, so an entry in the
+credential store would never reach it.
+
+The plugin therefore registers a `ctx.shellEnv` contributor — the documented
+seam for per-execution variables on model shell calls — which resolves the
+reference and publishes it as `DSH_MINERU_API_TOKEN`. Two constraints shaped
+that:
+
+- the shell namespace is `DSH_`-prefixed, so the value cannot be republished
+  under its own name;
+- `shellEnv.collect` is synchronous while credential resolution is not, so the
+  contributor returns the last resolved value and refreshes in the background,
+  driven by the `credentials/reference-updated` event. Refreshes are **not**
+  coalesced: an in-flight resolution must never swallow a newer one, or a saved
+  key would appear to need a restart.
+
+The script reads `DSH_MINERU_API_TOKEN` first and `MINERU_API_TOKEN` (plus
+aliases) after, so exporting a token by hand still works when the plugin is not
+installed. A `.env` file is a last resort — it leaves a plaintext secret on
+disk, which is the thing the settings page exists to avoid.
+
 ## Verify
 
 ```bash
-npm test                      # 75 tests
+npm test                      # 91 tests
 npm run doctor                # health check
 npm run upstream:verify       # upstream is pristine and at the pin
 ```

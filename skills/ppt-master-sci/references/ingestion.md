@@ -46,15 +46,37 @@ format-agnostic: it uploads what it is given and lets MinerU detect the type.
 
 ## Environment
 
+Resolved in this order, first hit wins:
+
 | Variable | Purpose |
 | --- | --- |
-| `MINERU_API_TOKEN` | Bearer token. **Required** unless `--from-zip`. |
+| `DSH_MINERU_API_TOKEN` | Published by the `dsh-ppt-master-plus` plugin on every model shell call, resolved from the key saved in its settings page. **Prefer this** — it is the only path that needs no shell setup. |
+| `MINERU_API_TOKEN` | Bearer token you export yourself. **Required** (via one of these names) unless `--from-zip`. |
 | `MINERU_API_KEY`, `MINERU_TOKEN` | Accepted aliases. |
 | `MINERU_API_BASE_URL`, `MINERU_BASE_URL` | API root. Default `https://mineru.net/api/v4`. |
 
 A `.env` in the working directory or any parent is read for these keys, but an
-already-exported environment variable always wins. Get a token from
+already-set environment variable always wins. Get a token from
 <https://mineru.net>.
+
+### Configuring the token
+
+**Preferred — in the app.** Open **插件 → dsh-ppt-master-plus** and paste the key.
+It is stored in DSH's credential service (not a file), and the plugin republishes
+it as `DSH_MINERU_API_TOKEN` on each shell call, so the script picks it up with
+no further setup.
+
+Only the official MinerU cloud API is supported; there is no provider picker and
+no self-hosted base URL to configure.
+
+**Fallback — from the shell.** If the plugin is not installed, export it:
+
+```bash
+export MINERU_API_TOKEN=...        # or put it in a .env file
+```
+
+Note that writing it into a `.env` leaves a plaintext secret on disk, which is
+why the settings page is preferred.
 
 ## Outputs
 
@@ -87,9 +109,11 @@ Diagnostics go to stderr.
 The script never silently degrades. If Ingestion cannot run, **say so** and let
 the user choose:
 
-1. supply `MINERU_API_TOKEN`;
-2. provide an existing MinerU archive and use `--from-zip`;
-3. accept upstream's `pdf_to_md.py` *knowingly*, with its known weaknesses.
+1. save a key in **插件 → dsh-ppt-master-plus**, then re-run (the plugin publishes
+   it as `DSH_MINERU_API_TOKEN` on the next shell call);
+2. export `MINERU_API_TOKEN` yourself, if the plugin is not installed;
+3. provide an existing MinerU archive and use `--from-zip`;
+4. accept upstream's `pdf_to_md.py` *knowingly*, with its known weaknesses.
 
 Presenting option 3 as equivalent to MinerU is the failure mode to avoid: the
 downstream formula plan and table values will be materially worse.

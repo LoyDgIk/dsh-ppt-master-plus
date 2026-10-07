@@ -20,7 +20,7 @@ dsh-ppt-master-plus/
 ├── scripts/
 │   ├── upstream.mjs         init / check / sync / verify / status
 │   └── cli.mjs              doctor / skills
-└── tests/                   75 个测试，含「上游保持干净」的不变量
+└── tests/                   91 个测试，含「上游保持干净」的不变量
 ```
 
 ## 为什么必须是 submodule
@@ -187,10 +187,37 @@ ERROR [p01] a funnel encodes loss through ordered stages, but values increase
 原型编目里没有任何一处写出颜色，并且有一个明确的检验标准：换掉配置后，
 每一个原型仍然可选。
 
+## 配置
+
+只有一个设置项：MinerU API Key。打开 **插件 → dsh-ppt-master-plus** 粘贴即可。
+
+| | |
+| --- | --- |
+| **接口地址** | `https://mineru.net/api/v4` —— 仅官方云服务。没有 Provider 选择，也没有本地部署地址。 |
+| **存储位置** | DSH 凭据服务，凭据引用名 `MINERU_API_TOKEN`。不落文件，也不会回显到页面上。 |
+| **如何生效** | 宿主半边在**每次模型 Shell 调用**时把它发布为 `DSH_MINERU_API_TOKEN`，`mineru_ingest.py` 因此无需任何 shell 配置即可读到。 |
+
+### 为什么除了页面还需要宿主半边
+
+存了一个没人读的 Key 只是装饰。`mineru_ingest.py` 以普通子进程运行，只看得到自己的环境变量——
+凭据服务里的一条记录本来永远到不了它手里。
+
+所以插件注册了一个 `ctx.shellEnv` 贡献者（DSH 文档中为「模型 Shell 调用注入每次执行变量」的正式扩展点），
+它解析该凭据引用并发布为 `DSH_MINERU_API_TOKEN`。有两个约束决定了实现：
+
+- Shell 命名空间强制 `DSH_` 前缀，所以不能沿用原变量名发布；
+- `shellEnv.collect` 是同步的，而凭据解析是异步的，因此贡献者返回「上次解析到的值」并在后台刷新，
+  由 `credentials/reference-updated` 事件驱动。刷新**刻意不做合并**：一次仍在飞行中的解析绝不能吞掉更新的那次，
+  否则保存后的 Key 会表现得「需要重启才生效」。
+
+脚本优先读 `DSH_MINERU_API_TOKEN`，之后才是 `MINERU_API_TOKEN` 及其别名，
+所以插件未安装时手动 export 依然可用。`.env` 是最后的退路——它会把明文密钥留在磁盘上，
+而这正是设置页要避免的事。
+
 ## 验证
 
 ```bash
-npm test                      # 75 个测试
+npm test                      # 91 个测试
 npm run doctor                # 健康检查
 npm run upstream:verify       # 上游干净且位于 pin 上
 ```

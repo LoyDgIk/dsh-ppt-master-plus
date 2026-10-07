@@ -33,8 +33,14 @@ Contract
     exit               : 0 ok · 2 usage/config error · 1 upstream/IO failure
 
 Environment
+    DSH_MINERU_API_TOKEN
+        Published by the dsh-ppt-master-plus DSH plugin on every model shell
+        call, resolved from the key saved in its settings page. This is the
+        first name consulted, so a token configured in the UI needs no shell
+        setup at all.
     MINERU_API_TOKEN | MINERU_API_KEY | MINERU_TOKEN
-        Bearer token for the MinerU API. Required unless --from-zip.
+        Bearer token for the MinerU API, for a token you export yourself.
+        Required (via one of these four names) unless --from-zip.
         A `.env` file beside the current directory is read for these keys.
     MINERU_API_BASE_URL | MINERU_BASE_URL
         Override the API root. Default https://mineru.net/api/v4
@@ -61,7 +67,13 @@ DEFAULT_BASE_URL = "https://mineru.net/api/v4"
 DEFAULT_POLL_INTERVAL_SECONDS = 2.0
 DEFAULT_TIMEOUT_SECONDS = 300.0
 
-TOKEN_ENV_KEYS = ("MINERU_API_TOKEN", "MINERU_API_KEY", "MINERU_TOKEN")
+# Resolution order, first hit wins.
+#
+# DSH_MINERU_API_TOKEN leads because the DSH plugin publishes it from the key
+# saved in its settings page — so the UI-configured path is the one that works
+# with no shell setup. The unprefixed names follow for a token the user exports
+# themselves or keeps in a .env file.
+TOKEN_ENV_KEYS = ("DSH_MINERU_API_TOKEN", "MINERU_API_TOKEN", "MINERU_API_KEY", "MINERU_TOKEN")
 BASE_URL_ENV_KEYS = ("MINERU_API_BASE_URL", "MINERU_BASE_URL")
 
 # Extensions MinerU accepts. The list is advisory only: this script uploads
@@ -171,9 +183,11 @@ def get_token() -> str:
         if value and value.strip():
             return value.strip()
     fail(
-        "MinerU API token is not configured. Set MINERU_API_TOKEN to a token "
-        "from https://mineru.net, or pass --from-zip with an existing MinerU "
-        "result archive to skip the API entirely.",
+        "MinerU API token is not configured. Get one from https://mineru.net and "
+        "either save it in Plugins -> dsh-ppt-master-plus (which publishes "
+        "DSH_MINERU_API_TOKEN to every shell call), or export MINERU_API_TOKEN "
+        "yourself. Alternatively pass --from-zip with an existing MinerU result "
+        "archive to skip the API entirely.",
         2,
     )
     return ""  # unreachable

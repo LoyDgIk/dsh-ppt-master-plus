@@ -172,6 +172,138 @@ export function apply(ctx) {
       return found === undefined ? undefined : toDefinition(found)
     },
   }))
+
+  registerMineruShellEnv(ctx)
+}
+
+// ─── MinerU credential bridge ───────────────────────────────────────────
+
+/**
+ * Credential reference the settings page writes to.
+ *
+ * Also the environment variable the MinerU CLI and the skill script read, so
+ * the same name works whether the user configures this in the UI or exports it
+ * from a shell.
+ */
+export const MINERU_CREDENTIAL_REF = 'MINERU_API_TOKEN'
+
+/**
+ * Shell variable published to every model shell call.
+ *
+ * `ctx.shellEnv` accepts only `DSH_`-prefixed keys, so the credential cannot be
+ * republished under its own name. The skill's `mineru_ingest.py` reads this
+ * first and falls back to the unprefixed names for users who export a token
+ * themselves.
+ */
+export const MINERU_SHELL_VAR = 'DSH_MINERU_API_TOKEN'
+
+/** Contributor id reported by `ctx.shellEnv.list()`. */
+export const SHELL_ENV_CONTRIBUTOR = PROVIDER_NAME
+
+/**
+ * Bridge the stored MinerU credential to the shell environment.
+ *
+ * Why this exists: storing the token is only half the feature. A key in DSH's
+ * credential store that no consumer reads is decoration — the Python script
+ * runs as an ordinary child process and sees only its environment. This
+ * registers a `ctx.shellEnv` contributor, which is the documented seam for
+ * adding per-execution variables to model shell calls, so a token saved in the
+ * settings page reaches the skill with no environment fiddling by the user.
+ *
+ * Two constraints shape the implementation:
+ *
+ *   1. The namespace is `DSH_`-prefixed, so the value is published as
+ *      {@link MINERU_SHELL_VAR} rather than under the reference name.
+ *   2. `shellEnv.collect` is synchronous while credential resolution is not,
+ *      so `resolve()` returns the last known value and refreshes in the
+ *      background. The `credentials/reference-updated` listener is what
+ *      normally keeps it current; the lazy refresh covers a missed event.
+ *
+ * Both dependencies are optional. A profile without them still gets the skills
+ * — it just does not get the credential bridge, and says so once rather than
+ * failing to load.
+ *
+ * @param ctx - the Cordis context.
+ */
+export function registerMineruShellEnv(ctx) {
+  const get = typeof ctx.get === 'function' ? (name) => ctx.get(name) : () => undefined
+  const shellEnv = get('shellEnv')
+  const credentials = get('credentials')
+
+  if (shellEnv === undefined || typeof shellEnv.register !== 'function') {
+    console.warn(
+      `[${PROVIDER_NAME}] shellEnv service unavailable; a MinerU key saved in the settings ` +
+        'page will not reach the skill scripts. Export MINERU_API_TOKEN instead.',
+    )
+    return
+  }
+  if (credentials === undefined || typeof credentials.resolve !== 'function') {
+    console.warn(
+      `[${PROVIDER_NAME}] credentials service unavailable; the settings page cannot store a ` +
+        'MinerU key. Export MINERU_API_TOKEN instead.',
+    )
+    return
+  }
+
+  /** Last successfully resolved token; '' when unconfigured. */
+  let cached = ''
+  /**
+   * Resolution generation.
+   *
+   * Every refresh starts its own resolution and only the newest one is allowed
+   * to write `cached`. Coalescing instead (returning an in-flight promise for a
+   * second request) looks tidier and is wrong: a `resolve()` on the shell path
+   * starts a resolution, and if the settings page commits a new key while that
+   * one is still in flight, the change would be swallowed and the stale value
+   * would win — the key would appear not to take effect until a restart, which
+   * is precisely the bug the event listener exists to prevent.
+   */
+  let generation = 0
+
+  const refresh = async () => {
+    const mine = ++generation
+    let next = ''
+    try {
+      const resolved = await credentials.resolve(MINERU_CREDENTIAL_REF)
+      next = resolved !== undefined && typeof resolved.value === 'string' ? resolved.value : ''
+    } catch {
+      // A resolution failure must not take down the plugin or leak a partial
+      // value; an empty token simply means the contributor publishes nothing.
+      next = ''
+    }
+    if (mine === generation) cached = next
+  }
+
+  void refresh()
+
+  if (typeof ctx.on === 'function') {
+    ctx.on('credentials/reference-updated', (ref) => {
+      if (ref === MINERU_CREDENTIAL_REF) void refresh()
+    })
+  }
+
+  try {
+    shellEnv.register({
+      name: SHELL_ENV_CONTRIBUTOR,
+      variables: {
+        [MINERU_SHELL_VAR]: {
+          description:
+            'MinerU API token for the ppt-master-sci skill. Configure it in Plugins → ' +
+            'dsh-ppt-master-plus, or export MINERU_API_TOKEN. Absent when no token is set.',
+        },
+      },
+      resolve() {
+        // Belt and braces: the event listener is what normally keeps this
+        // current, and this covers an event missed while the plugin was
+        // reloading. The value returned is the last resolved one, because
+        // `collect` is synchronous.
+        void refresh()
+        return cached === '' ? {} : { [MINERU_SHELL_VAR]: cached }
+      },
+    })
+  } catch (error) {
+    console.error(`[${PROVIDER_NAME}] shellEnv contributor registration skipped: ${error}`)
+  }
 }
 
 // ─── loading ────────────────────────────────────────────────────────────

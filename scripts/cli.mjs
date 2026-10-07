@@ -153,11 +153,33 @@ function doctor() {
     report(WARN, 'tex + dvisvgm', 'absent — optional; only the preview step needs it, native formula markers do not')
   }
 
-  const token = (process.env.MINERU_API_TOKEN ?? process.env.MINERU_API_KEY ?? process.env.MINERU_TOKEN ?? '').trim()
+  // Checked in the same order the skill's script resolves them. A token set in
+  // the settings page arrives as DSH_MINERU_API_TOKEN on a shell call, so this
+  // script — running as one — sees it here too.
+  const token = (
+    process.env.DSH_MINERU_API_TOKEN
+    ?? process.env.MINERU_API_TOKEN
+    ?? process.env.MINERU_API_KEY
+    ?? process.env.MINERU_TOKEN
+    ?? ''
+  ).trim()
   report(
     token !== '' ? OK : WARN,
     'mineru token',
-    token !== '' ? 'set' : 'MINERU_API_TOKEN not set — MinerU ingestion needs it, or use --from-zip',
+    token !== ''
+      ? `set (${process.env.DSH_MINERU_API_TOKEN ? 'from the plugin settings page' : 'from the environment'})`
+      : 'not set — save one in 插件 → dsh-ppt-master-plus, export MINERU_API_TOKEN, or use --from-zip',
+  )
+
+  // The bridge is only observable from inside the host process, so report the
+  // documented contract rather than guessing at the live state.
+  const clientPath = join(PACKAGE_DIR, 'dsh', 'client.js')
+  report(
+    existsSync(clientPath) ? OK : WARN,
+    'settings page',
+    existsSync(clientPath)
+      ? 'dsh/client.js present — appears under 插件 → dsh-ppt-master-plus once the bundle is installed'
+      : 'dsh/client.js missing',
   )
 
   const failed = findings.filter((finding) => finding.level === BAD).length

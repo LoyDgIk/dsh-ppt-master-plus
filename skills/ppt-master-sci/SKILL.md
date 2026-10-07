@@ -83,10 +83,17 @@ matching upstream's own line protocol.
 It writes `<stem>.md` plus a sibling `<stem>_files/` directory holding the
 figures and an `image_manifest.json`.
 
-**Requires** a MinerU API token in `MINERU_API_TOKEN`. If no token is available
-or the network is blocked, stop and say so plainly — do **not** silently fall
-back to a lower-quality parse and present it as equivalent. If a MinerU result
-archive already exists, `--from-zip` works fully offline.
+**Requires** a MinerU API token. It is read from `DSH_MINERU_API_TOKEN`, which the
+`dsh-ppt-master-plus` plugin publishes on every shell call from the key saved in
+its settings page (**插件 → dsh-ppt-master-plus**); `MINERU_API_TOKEN` and its
+aliases still work for a token you export yourself. Only the official MinerU
+cloud API is supported — there is no self-hosted endpoint to configure.
+
+If no token is available or the network is blocked, stop and say so plainly — do
+**not** silently fall back to a lower-quality parse and present it as equivalent.
+If a MinerU result archive already exists, `--from-zip` works fully offline. When
+the token is missing, tell the user where to set it rather than only that it is
+missing.
 
 **What this buys you**: MinerU reconstructs reading order, tables and LaTeX for
 scientific PDFs, where a text-layer extractor typically returns interleaved

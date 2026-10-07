@@ -18,12 +18,16 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
+  MINERU_CREDENTIAL_REF,
+  MINERU_SHELL_VAR,
   PROVIDER_NAME,
   PACKAGE_DIR,
+  SHELL_ENV_CONTRIBUTOR,
   UPSTREAM_ENV,
   apply,
   parseFrontmatterYaml,
   parseSkillMarkdown,
+  registerMineruShellEnv,
   resolveUpstreamDir,
   runtimePreamble,
   skillRoots,
@@ -252,5 +256,324 @@ describe('layout resolution', () => {
     assert.ok(preamble.includes(join(upstreamSkillDir, 'references')))
     assert.ok(preamble.includes(upstreamDir))
     assert.match(preamble, /never write into the upstream checkout/i)
+  })
+})
+
+describe('MinerU credential bridge', () => {
+  /**
+   * Build a stub context exposing the two optional services.
+   *
+   * @param options - `token` seeds `credentials.resolve`, `omit` drops a service.
+   * @returns `{ ctx, contributor, emitted, resolveCalls }`.
+   */
+  function harness(options = {}) {
+    const state = { token: options.token, resolveCalls: 0 }
+    const emitted = new Map()
+
+    const credentials = {
+      async resolve(ref) {
+        state.resolveCalls += 1
+        assert.equal(ref, MINERU_CREDENTIAL_REF, 'only the MinerU reference is consulted')
+        if (state.token === undefined || state.token === '') return undefined
+        return { value: state.token, source: 'provider-managed' }
+      },
+    }
+
+    let contributor
+    const shellEnv = {
+      register(definition) {
+        contributor = definition
+        return () => {}
+      },
+    }
+
+    const services = { shellEnv, credentials, skills: { registerProvider() {} } }
+    if (options.omit !== undefined) delete services[options.omit]
+
+    const ctx = {
+      get: (name) => services[name],
+      on: (event, listener) => {
+        emitted.set(event, listener)
+        return () => {}
+      },
+      skills: services.skills,
+    }
+
+    registerMineruShellEnv(ctx)
+    return { ctx, contributor, emitted, state, getContributor: () => contributor }
+  }
+
+  test('publishes exactly the documented variable', () => {
+    const { contributor } = harness({ token: 'k' })
+    assert.ok(contributor, 'a contributor must be registered')
+    assert.equal(contributor.name, SHELL_ENV_CONTRIBUTOR)
+    assert.deepEqual(Object.keys(contributor.variables), [MINERU_SHELL_VAR])
+    assert.match(contributor.variables[MINERU_SHELL_VAR].description, /MinerU API token/)
+  })
+
+  test('variables are DSH_-prefixed, as the namespace requires', () => {
+    // shellEnv accepts only `${DSH_}${string}` keys; a name without the prefix
+    // would be rejected by the registry and silently publish nothing.
+    assert.match(MINERU_SHELL_VAR, /^DSH_/)
+    assert.equal(MINERU_CREDENTIAL_REF, 'MINERU_API_TOKEN')
+  })
+
+  test('publishes nothing while no token is stored', async () => {
+    const { contributor } = harness({})
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(contributor.resolve({}), {})
+  })
+
+  test('publishes the resolved token once it is stored', async () => {
+    const { contributor } = harness({ token: 'mineru-secret' })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(contributor.resolve({}), { [MINERU_SHELL_VAR]: 'mineru-secret' })
+  })
+
+  test('a changed credential reaches the next shell call', async () => {
+    const { contributor, emitted, state } = harness({ token: 'first' })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(contributor.resolve({})[MINERU_SHELL_VAR], 'first')
+
+    // The settings page writes through the RPC, which commits and emits.
+    state.token = 'second'
+    const listener = emitted.get('credentials/reference-updated')
+    assert.ok(listener, 'the plugin must listen for credential changes')
+    listener(MINERU_CREDENTIAL_REF)
+    await new Promise((resolve) => setImmediate(resolve))
+
+    assert.equal(
+      contributor.resolve({})[MINERU_SHELL_VAR],
+      'second',
+      'a saved key must take effect without a restart',
+    )
+  })
+
+  test('ignores updates to other credential references', async () => {
+    const { contributor, emitted, state } = harness({ token: 'first' })
+    await new Promise((resolve) => setImmediate(resolve))
+    state.resolveCalls = 0
+
+    emitted.get('credentials/reference-updated')('SOME_OTHER_KEY')
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(state.resolveCalls, 0, 'an unrelated reference must not trigger work')
+    assert.equal(contributor.resolve({})[MINERU_SHELL_VAR], 'first')
+  })
+
+  test('a disappearing token stops being published', async () => {
+    const { contributor, emitted, state } = harness({ token: 'gone-soon' })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.ok(contributor.resolve({})[MINERU_SHELL_VAR])
+
+    state.token = ''
+    emitted.get('credentials/reference-updated')(MINERU_CREDENTIAL_REF)
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(contributor.resolve({}), {}, 'clearing the key must stop publishing it')
+  })
+
+  test('degrades with a warning when a service is missing', () => {
+    // Neither optional dependency may take the plugin down: the skills still
+    // work, only the bridge is absent.
+    for (const missing of ['shellEnv', 'credentials']) {
+      const warns = []
+      const original = console.warn
+      console.warn = (message) => warns.push(String(message))
+      try {
+        assert.doesNotThrow(() => harness({ token: 'k', omit: missing }))
+      } finally {
+        console.warn = original
+      }
+      assert.ok(
+        warns.some((line) => line.includes(missing)),
+        `a missing ${missing} service must be reported, not swallowed`,
+      )
+    }
+  })
+
+  test('apply() wires the bridge alongside the skills provider', () => {
+    // The bridge is part of apply(), so a profile that never calls it would
+    // silently lose the settings-page feature.
+    const registered = []
+    const ctx = {
+      get: (name) => (name === 'shellEnv' || name === 'credentials'
+        ? { register: (d) => { registered.push(d); return () => {} }, resolve: async () => undefined }
+        : undefined),
+      on: () => () => {},
+      skills: { registerProvider: () => {} },
+    }
+    apply(ctx)
+    assert.equal(registered.length, 1, 'apply() must register the shellEnv contributor')
+    assert.deepEqual(Object.keys(registered[0].variables), [MINERU_SHELL_VAR])
+  })
+})
+
+describe('settings page client half', () => {
+  const CLIENT = join(PACKAGE_DIR, 'dsh', 'client.js')
+
+  test('is declared in the manifest and shipped', () => {
+    const manifest = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'))
+    assert.equal(manifest.exports['./client'], './dsh/client.js')
+    assert.ok(manifest.files.includes('dsh'), 'the client half must be published')
+    assert.equal(manifest.dsh.client.platform, 'web')
+    // `immediately` is unnecessary here: the plugin-manager page imports the
+    // bundle, so the lazy module table loads it. flashmade needs the flag
+    // because nothing imports its id.
+    assert.ok(existsSync(CLIENT), 'dsh/client.js must exist')
+  })
+
+  test('reads and writes the same reference the host half resolves', () => {
+    const source = readFileSync(CLIENT, 'utf8')
+    assert.ok(source.includes(`'${MINERU_CREDENTIAL_REF}'`), 'client must use the shared reference')
+    assert.ok(source.includes(MINERU_SHELL_VAR), 'client must document the shell variable')
+    assert.match(source, /credentials\.set\(/, 'client must persist through the credential service')
+    assert.match(source, /credentials\.unset\(/, 'client must be able to clear the key')
+    assert.match(source, /credentials\.describe\(/, 'client must report configured state')
+  })
+
+  test('registers into the plugin config slot under the package name', () => {
+    const source = readFileSync(CLIENT, 'utf8')
+    assert.match(source, /window\.__ModuleLoader__\.load\(/)
+    assert.match(source, /ctx\.slots\.inject\('plugins\.bundle\.config'/)
+    assert.match(source, /key: 'dsh-ppt-master-plus'/)
+  })
+
+  test('never writes the token to disk and never echoes it back', () => {
+    const source = readFileSync(CLIENT, 'utf8')
+    // A settings page that mirrors a secret into the DOM is a leak; the value
+    // is only ever sent host-ward, never read back out.
+    assert.ok(!/localStorage/.test(source), 'a secret must not be persisted in the browser')
+    assert.ok(!/writeFile|fs\.write/.test(source), 'the client half has no filesystem access')
+  })
+
+  test('the skill reads the plugin-published variable first', () => {
+    const script = readFileSync(
+      join(PACKAGE_DIR, 'skills', 'ppt-master-sci', 'scripts', 'mineru_ingest.py'),
+      'utf8',
+    )
+    const order = script.match(/TOKEN_ENV_KEYS = \(([^)]*)\)/)
+    assert.ok(order, 'TOKEN_ENV_KEYS must be declared')
+    const names = order[1].split(',').map((part) => part.trim().replace(/^"|"$/g, '')).filter(Boolean)
+    assert.equal(names[0], MINERU_SHELL_VAR, 'the plugin-published name must be consulted first')
+    assert.ok(names.includes('MINERU_API_TOKEN'), 'the manual name must still work')
+  })
+
+  /**
+   * Execute the client bundle against a stub module loader.
+   *
+   * The client half is delivered in DSH's lazy-CJS protocol, so the only way to
+   * exercise its registration path without a browser is to provide the globals
+   * it expects and capture what it does. This is deliberately not a render
+   * test: what matters here is that the page registers under the right slot and
+   * key, because getting that wrong fails silently — the page simply never
+   * appears, with no error anywhere.
+   *
+   * @returns `{ exports, ctx, registered, injected }`.
+   */
+  function loadClient() {
+    const source = readFileSync(CLIENT, 'utf8')
+    const registered = []
+    const injected = []
+    let captured
+
+    const sandbox = {
+      window: {
+        __ModuleLoader__: {
+          load(definition) {
+            captured = definition
+          },
+        },
+      },
+    }
+
+    // A React stub sufficient for module initialisation: nothing renders here,
+    // so only the call surface has to exist.
+    const react = {
+      createElement: (...args) => ({ type: 'stub', args }),
+      useState: (initial) => [initial, () => {}],
+      useEffect: () => {},
+      useCallback: (fn) => fn,
+    }
+
+    const require = (name) => {
+      if (name === 'react') return react
+      throw new Error(`client half must not require ${name}`)
+    }
+
+    const previousWindow = globalThis.window
+    globalThis.window = sandbox.window
+    try {
+      // eslint-disable-next-line no-new-func
+      new Function('window', source)(sandbox.window)
+    } finally {
+      globalThis.window = previousWindow
+    }
+
+    assert.ok(captured, 'the bundle must call window.__ModuleLoader__.load')
+    assert.equal(captured.id, 'dsh-ppt-master-plus')
+
+    const clientExports = captured.factory(require)
+
+    const ctx = {
+      get: (name) => (name === 'connection' ? { rpc: {} } : undefined),
+      effect: (fn) => fn(),
+      locale: { register: () => () => {} },
+      remote: { credentials: { describe: async () => ({ ok: true, value: {} }) } },
+      slots: {
+        inject: (key, callback) => {
+          injected.push(key)
+          return callback()
+        },
+        register: (options, component) => {
+          registered.push({ options, component })
+          return () => {}
+        },
+      },
+    }
+
+    return { exports: clientExports, ctx, registered, injected }
+  }
+
+  test('registers under the plugin config slot with the package name as key', () => {
+    const { exports: clientExports, ctx, registered, injected } = loadClient()
+
+    assert.deepEqual(clientExports.inject, [
+      'slots',
+      'locale',
+      'connection',
+      'remote',
+      'remote.credentials',
+    ])
+    clientExports.apply(ctx)
+
+    assert.deepEqual(injected, ['plugins.bundle.config'])
+    assert.equal(registered.length, 1)
+    assert.equal(registered[0].options.name, 'plugins.bundle.config')
+    assert.equal(
+      registered[0].options.key,
+      'dsh-ppt-master-plus',
+      'the key must be the bundle package name or the page renders nowhere',
+    )
+    assert.equal(registered[0].options.locale, 'dsh-ppt-master-plus')
+    assert.equal(typeof registered[0].component, 'function')
+    assert.equal(typeof registered[0].options.inject, 'function')
+    assert.ok(registered[0].options.inject().credentials, 'the page needs the credential client')
+  })
+
+  test('refuses to mount a page it cannot save from', () => {
+    // Without a connection there is no credential RPC. Mounting anyway would
+    // render a form whose Save button cannot work, which is worse than an
+    // absent page: it looks like the plugin is broken.
+    const { exports: clientExports, ctx, registered } = loadClient()
+    const broken = { ...ctx, get: () => undefined }
+    const errors = []
+    const original = console.error
+    console.error = (message) => errors.push(String(message))
+    try {
+      clientExports.apply(broken)
+    } finally {
+      console.error = original
+    }
+    assert.equal(registered.length, 0, 'no page may be mounted without credential access')
+    assert.ok(errors.some((line) => line.includes('connection')), 'and it must say why')
   })
 })
