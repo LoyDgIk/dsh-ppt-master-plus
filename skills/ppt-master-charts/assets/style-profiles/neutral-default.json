@@ -1,0 +1,77 @@
+{
+  "schema": "dsh-ppt-master-plus.style-profile.v1",
+  "id": "neutral-default",
+  "name": "Neutral default",
+  "provenance": {
+    "kind": "authored",
+    "note": "The fallback profile. Deliberately colourless: a single slate ramp carries the categorical encoding, so 'no style supplied' never silently resolves to the blue-gray reference sample. Intended to be replaced by a brand- or brief-derived profile in any real engagement."
+  },
+
+  "canvas": { "format": "ppt169", "width": 1920, "height": 1080 },
+  "contentArea": { "left": 150, "right": 1770, "top": 120, "bottom": 990 },
+
+  "palette": {
+    "primaryRamp": [
+      "#1E293B",
+      "#334155",
+      "#475569",
+      "#5B6B7F",
+      "#748396",
+      "#8D9AAB",
+      "#A6B1C0",
+      "#BFC8D4"
+    ],
+    "text": {
+      "primary": "#1E293B",
+      "secondary": "#475569",
+      "muted": "#8D9AAB"
+    },
+    "surfaces": {
+      "card": "#F1F5F9",
+      "track": "#E2E8F0",
+      "block": "#F8FAFC"
+    },
+    "accent": {
+      "base": "#B45309",
+      "gradient": ["#D97706", "#92400E"]
+    },
+    "background": {
+      "gradient": ["#FFFFFF", "#FBFCFD", "#F6F8FA"]
+    },
+    "inverse": {
+      "fill": ["#334155", "#1E293B"],
+      "text": "#FFFFFF",
+      "textSecondary": "#CBD5E1"
+    }
+  },
+
+  "typography": {
+    "cjk": "Microsoft YaHei",
+    "latin": "Arial",
+    "roles": {
+      "title": 44,
+      "itemTitle": 25,
+      "body": 18,
+      "label": 16,
+      "footer": 14
+    },
+    "display": { "min": 40, "max": 72 },
+    "minSize": 14
+  },
+
+  "shape": {
+    "cornerRadius": { "card": [16, 24], "barTop": [8, 10], "ringSegment": true },
+    "shadow": { "card": "0 8 24 rgba(15,23,42,0.08)" },
+    "strokeWidth": 2,
+    "iconStroke": "round",
+    "connectorDash": "3 4"
+  },
+
+  "rules": {
+    "maxAccentUsesPerPage": 2,
+    "minContrastRatio": 4.5,
+    "categoricalUsesRampOnly": true,
+    "negativeUsesAccent": true,
+    "minTextSize": 14
+  }
+}

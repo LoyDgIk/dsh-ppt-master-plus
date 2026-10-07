@@ -239,8 +239,25 @@ examples:
     return parser
 
 
+def configure_utf8_stdio() -> None:
+    """
+    Force UTF-8 on stdout/stderr.
+
+    Windows consoles default to a legacy code page. Without this, LaTeX source
+    containing CJK arrives mangled whenever the output is redirected or captured
+    rather than printed to a terminal. Mirrors the convention upstream uses for
+    its own CLI scripts.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point."""
+    configure_utf8_stdio()
     args = build_parser().parse_args(argv)
 
     env_compiler = args.compiler or os.environ.get("PPT_MASTER_TEX_COMPILER") or None

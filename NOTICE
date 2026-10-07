@@ -69,6 +69,40 @@ of date with upstream's own later work — see §3.
 Early documentation of the ppt-master lineage was consulted for historical
 context. No content was carried across.
 
+### A commercial chart library — design reference for `ppt-master-charts`
+
+A commercial 200-page chart library distributed as a PowerPoint file with
+accompanying generation prompts. It was supplied by the user of this repository
+as a design reference and is **not redistributed, bundled, or committed** here.
+
+**What was taken:** ideas only.
+
+| Taken | Not taken |
+| --- | --- |
+| The taxonomy of five intents (structure / process / comparison / data / page) | No text from its prompt files |
+| The names of generic diagram archetypes — pyramid, fishbone, swimlane, Venn, waterfall, and the rest | No slide file, SVG, or extracted geometry |
+| The craft discipline (label every element in place; one readable statement per page; stated figures must reconcile with the data; one accent used sparingly; a minimum type size; native shapes only) | No page composition, and no image or asset of any kind |
+| The idea of a style profile, abstracted *away* from it | Its palette is not used as a default — see below |
+
+Diagram archetypes such as "SWOT", "fishbone" and "funnel" are generic
+visual-communication concepts with no single author. The craft rules were
+**rewritten to be style-independent**: the source states them alongside a
+specific blue-gray palette, a specific typeface and a specific canvas, and none
+of that is part of a rule.
+
+**On its palette.** Its colour values are recorded once, in
+`skills/ppt-master-charts/assets/style-profiles/blue-gray-business.json`, whose
+`provenance.kind` is `reference-sample`. It exists to demonstrate what a
+complete style profile looks like. It is explicitly **not** the house default —
+`neutral-default.json` is — and the documentation states repeatedly that every
+value in it is meant to be replaced. Colour values are facts and are not
+protected; the file contains nothing else from the source.
+
+If you are the rights holder and want this reference removed, delete the
+`blue-gray-business.json` profile and the "Where these came from" section of
+`skills/ppt-master-charts/references/craft-rules.md`. Nothing else depends on
+it, by design.
+
 ## 3. Where this plugin deliberately differs from the sci-fork
 
 Stated here so the divergence is a recorded decision rather than an omission.
@@ -81,6 +115,20 @@ Stated here so the divergence is a recorded decision rather than an omission.
 | LaTeX → SVG | Core slide pipeline | Optional **preview only**, explicitly not a slide asset | Same rule; previews are a QA aid, not output |
 | Formula sizing | Patches upstream's `svg_quality_checker.py` | Guidance in the skill's own references | Editing the checker would modify upstream |
 | Academic layouts | Added under `templates/layouts/` inside the skill | Shipped as an **unregistered external workspace root** | Upstream supports `explicit` roots; registration would write into upstream |
+
+### And a further divergence, from the chart reference
+
+The chart library reference (`ppt-master-charts`) also hard-codes its style. This
+plugin keeps its **forms** and its **craft**, and moves the style into a
+swappable profile:
+
+| Area | Reference chart library | This plugin | Why |
+| --- | --- | --- | --- |
+| Style | Hard-coded throughout: one palette, one typeface, one canvas, stated as rules on every page | Extracted into `assets/style-profiles/*.json`, selected by precedence, with a colourless `neutral-default` fallback | A skill that bakes in one palette produces one look, then fights every brand it meets |
+| Quantitative charts | Drawn as shape geometry on every page | Deferred to upstream's 33 `chart/<key>` references, which have one owner | Two catalogs drift; upstream's is current and states when native charts are available |
+| Scale | 200 pages | ~200 archetype **keys** in a catalog, plus a validator | A skill needs coverage of relationships, not a slide count |
+| Correctness | "Recheck the numbers yourself before output" (an instruction to the model) | `chart_plan.py` recomputes every stated figure from the page's own data | A rule the model must remember is a rule that gets skipped; a script does not forget |
+| Editable claim | Shape geometry only — no native chart objects anywhere | Documents the native-vs-drawn trade-off and tells the author to choose | Shape geometry is right for a fixed published library and wrong when the audience wants the data |
 
 ## 4. Optional third-party tools
 
@@ -97,6 +145,15 @@ The academic layout pack under
 `skills/ppt-master-sci/assets/template-library/` is original work authored for
 this plugin. It contains no upstream template files and no third-party imagery,
 fonts or icons: every element is a plain SVG shape or a text placeholder.
+
+The style profiles under
+`skills/ppt-master-charts/assets/style-profiles/` are original files:
+
+- `neutral-default.json` is authored for this plugin.
+- `blue-gray-business.json` records the colour values of the chart-library
+  design reference described in §2. Colour values are unprotectable facts, and
+  the file contains nothing else from that source — no text, no geometry, no
+  assets. It is marked `reference-sample` and is not the default.
 
 Upstream's own icon, sound and template libraries live inside the submodule and
 are covered by upstream's notices.

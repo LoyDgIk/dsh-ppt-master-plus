@@ -1,0 +1,77 @@
+{
+  "schema": "dsh-ppt-master-plus.style-profile.v1",
+  "id": "blue-gray-business",
+  "name": "Blue-gray business",
+  "provenance": {
+    "kind": "reference-sample",
+    "note": "Reconstructed from the design reference for ppt-master-charts: a third-party commercial 200-page chart library supplied by the user, neither redistributed nor bundled here. Included to demonstrate a complete profile — NOT as a house default. Replace every value when a brand is supplied. That reference hard-codes this style across all its pages, which is correct for a published library and wrong for a reusable skill."
+  },
+
+  "canvas": { "format": "ppt169", "width": 1920, "height": 1080 },
+  "contentArea": { "left": 150, "right": 1770, "top": 120, "bottom": 990 },
+
+  "palette": {
+    "primaryRamp": [
+      "#0B3E8F",
+      "#134C9C",
+      "#1B5AA8",
+      "#2468B6",
+      "#2E77C2",
+      "#3985CD",
+      "#4694D7",
+      "#54A2DF"
+    ],
+    "text": {
+      "primary": "#0B2545",
+      "secondary": "#64748B",
+      "muted": "#7E93AE"
+    },
+    "surfaces": {
+      "card": "#EAF1FA",
+      "track": "#DCE7F5",
+      "block": "#E3EBF6"
+    },
+    "accent": {
+      "base": "#E0703A",
+      "gradient": ["#F08A4B", "#C95A22"]
+    },
+    "background": {
+      "gradient": ["#FBFCFE", "#F3F7FC", "#E9EFF8"]
+    },
+    "inverse": {
+      "fill": ["#1E62B2", "#0A3A88"],
+      "text": "#FFFFFF",
+      "textSecondary": "#CFE0F4"
+    }
+  },
+
+  "typography": {
+    "cjk": "Microsoft YaHei",
+    "latin": "Arial",
+    "roles": {
+      "title": 44,
+      "itemTitle": 25,
+      "body": 17.5,
+      "label": 16,
+      "footer": 14
+    },
+    "display": { "min": 40, "max": 72 },
+    "minSize": 14
+  },
+
+  "shape": {
+    "cornerRadius": { "card": [16, 26], "barTop": [8, 10], "ringSegment": true },
+    "shadow": { "card": "0 8 24 rgba(10,58,136,0.10)" },
+    "strokeWidth": 2,
+    "iconStroke": "round",
+    "connectorDash": "3 4"
+  },
+
+  "rules": {
+    "maxAccentUsesPerPage": 2,
+    "minContrastRatio": 4.5,
+    "categoricalUsesRampOnly": true,
+    "negativeUsesAccent": true,
+    "minTextSize": 14
+  }
+}

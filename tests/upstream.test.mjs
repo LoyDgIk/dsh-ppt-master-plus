@@ -91,6 +91,27 @@ describe('plugin additions live outside upstream', () => {
     assert.ok(!sci.startsWith(UPSTREAM_DIR), 'the skill must not live under vendor/')
   })
 
+  test('the charts skill is a sibling too, and duplicates no upstream file', () => {
+    const charts = join(PACKAGE_DIR, 'skills', 'ppt-master-charts')
+    assert.ok(existsSync(join(charts, 'SKILL.md')))
+    assert.ok(existsSync(join(charts, 'scripts', 'chart_plan.py')))
+    assert.ok(existsSync(join(charts, 'assets', 'style-profiles', 'neutral-default.json')))
+    assert.ok(existsSync(join(charts, 'assets', 'style-profiles', 'blue-gray-business.json')))
+    assert.ok(!charts.startsWith(UPSTREAM_DIR))
+
+    // Upstream's chart SVGs must not be copied in: this skill selects and
+    // specifies forms, it does not re-host upstream's assets.
+    const upstreamCharts = join(UPSTREAM_DIR, 'skills', 'ppt-master', 'templates', 'charts')
+    if (existsSync(upstreamCharts)) {
+      const chartNames = readdirSync(upstreamCharts).filter((n) => n.endsWith('.svg'))
+      const bundled = existsSync(join(charts, 'assets', 'charts'))
+        ? readdirSync(join(charts, 'assets', 'charts')) : []
+      for (const name of chartNames) {
+        assert.ok(!bundled.includes(name), `${name} duplicates an upstream chart asset`)
+      }
+    }
+  })
+
   test('the SCI SKILL.md declares the required frontmatter', () => {
     const raw = readFileSync(join(PACKAGE_DIR, 'skills', 'ppt-master-sci', 'SKILL.md'), 'utf8')
     assert.match(raw, /^---\r?\n/)

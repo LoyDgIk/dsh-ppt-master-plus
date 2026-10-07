@@ -2,7 +2,7 @@
 
 A [DeepSeek Harness](https://github.com/deepseek-ai) plugin that turns
 [ppt-master](https://github.com/hugohe3/ppt-master) into an installable DSH
-bundle — and layers scientific/academic capability on top **without touching a
+bundle — and layers scientific and chart capability on top **without touching a
 single upstream file**.
 
 The design rests on one decision: upstream is a **git submodule**, not a
@@ -18,11 +18,12 @@ dsh-ppt-master-plus/
 │   └── ppt-master/          ← git submodule. READ-ONLY. never edited.
 │       └── skills/ppt-master/    upstream skill, registered verbatim
 ├── skills/
-│   └── ppt-master-sci/      ← this plugin's own skill (the SCI layer)
+│   ├── ppt-master-sci/      ← scientific front end (MinerU, formulas, academic layouts)
+│   └── ppt-master-charts/   ← chart/diagram selection and visual discipline
 ├── scripts/
 │   ├── upstream.mjs         init / check / sync / verify / status
 │   └── cli.mjs              doctor / skills
-└── tests/                   46 tests, including the "upstream is pristine" invariants
+└── tests/                   75 tests, including the "upstream is pristine" invariants
 ```
 
 ## Why a submodule, and why that matters
@@ -97,6 +98,7 @@ One `ctx.skills.registerProvider()` projecting two roots onto `ctx.skills`:
 | --- | --- | --- |
 | `ppt-master` | `vendor/ppt-master/skills/` | **Byte-for-byte** as it exists on disk, `source: upstream` |
 | `ppt-master-sci` | `skills/` | With a runtime preamble that publishes the upstream paths |
+| `ppt-master-charts` | `skills/` | Same — bundled skills are siblings of the upstream tree, never inside it |
 
 Two details carry weight:
 
@@ -150,10 +152,81 @@ When neither is available, the skill **says so** and offers upstream's own
 as equivalent to MinerU is the failure mode this plugin is written to avoid:
 the downstream formula plan and table values are materially worse.
 
+## The charts layer
+
+`ppt-master-charts` fills a gap that upstream **declares**. Upstream ships 33
+canonical **quantitative** chart references, catalogued by encoded relationship.
+For everything that is not a quantitative chart, upstream says:
+
+> Qualitative Structure is a Slide-local Executor method, not a catalog.
+
+So pyramids, honeycombs, fishbones, org trees, swimlanes, flywheels, Venn
+intersections and the rest are left to be improvised — which is where a deck
+starts looking like a template with the words swapped in.
+
+| Component | What it does |
+| --- | --- |
+| `references/archetype-catalog.md` | ~110 qualitative forms across Structure / Process / Comparison, each with the relationship it encodes, the **data shape** it requires, and when to avoid it |
+| `references/data-archetypes.md` | Data/page forms, plus the **bridge** to upstream's 33 — which stay upstream's, with one owner |
+| `references/selection.md` | Message → intent → archetype routing, and 13 named anti-patterns |
+| `references/craft-rules.md` | Style-independent visual discipline |
+| `references/style-profiles.md` | How to derive a theme profile |
+| `references/library-build.md` | Building a reusable chart *library* rather than one deck |
+| `scripts/chart_plan.py` | Validates a `chart_plan.json`: archetype knowledge, data-shape fit, arithmetic consistency, craft counts |
+| `assets/style-profiles/` | Two sample profiles |
+
+### The numbers must add up — mechanically
+
+The single most damaging defect in a data page is a stated figure that does not
+reconcile with the chart beneath it. An audience that catches one stops
+trusting every other number.
+
+Upstream's guidance and the design reference behind this skill both handle it as
+advice ("recheck the numbers before output"). This plugin makes it a **gate**:
+
+```bash
+python3 skills/ppt-master-charts/scripts/chart_plan.py projects/demo/chart_plan.json --fail-on-issue
+```
+
+Every figure a page *states* — a percentage, a multiple, a total, a delta — is
+recomputed from that page's own data:
+
+```text
+ERROR [p01] '整体转化 12%': states 12% but 成单/1000 = 18%.  (claim-1)
+ERROR [p01] a funnel encodes loss through ordered stages, but values increase
+            at position 2 (100 → 420). Change the form or the data — do not bend
+            the data.  (shape-not-monotonic)
+```
+
+It also refuses forms their data cannot support: a funnel over increasing values,
+a Venn with no intersection, a quadrant with unnamed axes, weighted scores whose
+weights do not sum, a loop with no return edge.
+
+### Style is a profile, not a hard-coding
+
+This is the part that makes the skill **reusable** rather than one look.
+
+The reference library for this skill hard-codes its style — one palette, one
+typeface, one canvas, stated as rules across all its pages. That is right for a
+published product and wrong for a skill, which would then fight every brand it
+met.
+
+So the forms are style-free and the look lives in a swappable profile:
+
+| | |
+| --- | --- |
+| `neutral-default.json` | The **default**. Deliberately colourless. |
+| `blue-gray-business.json` | A `reference-sample` profile, shipped to show what a complete profile looks like. Explicitly not the house style; every value is meant to be replaced. |
+
+Precedence: a brand workspace the user supplied → a named profile → a profile
+derived from the brief → `neutral-default`. Nothing in the archetype catalog
+names a colour, and there is a stated test for that: swap the profile and every
+archetype must still be selectable.
+
 ## Verify
 
 ```bash
-npm test                      # 46 tests
+npm test                      # 75 tests
 npm run doctor                # health check
 npm run upstream:verify       # upstream is pristine and at the pin
 ```
@@ -169,7 +242,7 @@ workspace shape. It skips cleanly when the submodule or Python is absent.
 | --- | --- |
 | Node | ≥ 20 (24 tested) |
 | DSH | ≥ 0.1.1-rc.1 |
-| Python 3.9+ | for the SCI skill's scripts (stdlib only) |
+| Python 3.9+ | for both skills' scripts (stdlib only) |
 | `MINERU_API_TOKEN` | for MinerU ingestion; optional with `--from-zip` |
 | MiKTeX / TeX Live + `dvisvgm` | optional, preview only |
 
@@ -177,9 +250,10 @@ workspace shape. It skips cleanly when the submodule or Python is absent.
 
 Upstream ppt-master is MIT, © Hugo He, and is **not** included in this
 repository — it is fetched as a submodule and carries its own licence. The two
-reference plugins informed the design without any code being copied. See
-[`NOTICE`](./NOTICE) for the full record, including every place where this
-plugin deliberately diverges from the sci-fork.
+reference plugins, and a third-party commercial chart library used as a design
+reference, informed this plugin without any of their content being copied or
+redistributed. See [`NOTICE`](./NOTICE) for the full record, including every
+place where this plugin deliberately diverges from its references.
 
 ## Licence
 

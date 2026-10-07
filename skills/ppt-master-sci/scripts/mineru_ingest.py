@@ -76,6 +76,23 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".t
 # ────────────────────────────────────────────────────────────────
 
 
+def configure_utf8_stdio() -> None:
+    """
+    Force UTF-8 on stdout/stderr.
+
+    Windows consoles default to a legacy code page. Without this, status lines
+    containing CJK filenames arrive mangled whenever the output is redirected or
+    captured rather than printed to a terminal — which is exactly how a caller
+    parses the `OUTPUT:` line. Mirrors the convention upstream uses for its own
+    CLI scripts.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
+
 def log(message: str) -> None:
     """Write a diagnostic line to stderr (keeps stdout machine-parseable)."""
     print(message, file=sys.stderr)
@@ -537,6 +554,7 @@ examples:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point."""
+    configure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
 

@@ -15,11 +15,12 @@ dsh-ppt-master-plus/
 │   └── ppt-master/          ← git submodule。只读，永不修改
 │       └── skills/ppt-master/    上游技能，原样注册
 ├── skills/
-│   └── ppt-master-sci/      ← 本插件自己的技能（SCI 层）
+│   ├── ppt-master-sci/      ← 科研前端（MinerU、公式、学术版式）
+│   └── ppt-master-charts/   ← 图表/图示选择与视觉纪律
 ├── scripts/
 │   ├── upstream.mjs         init / check / sync / verify / status
 │   └── cli.mjs              doctor / skills
-└── tests/                   46 个测试，含「上游保持干净」的不变量
+└── tests/                   75 个测试，含「上游保持干净」的不变量
 ```
 
 ## 为什么必须是 submodule
@@ -75,6 +76,10 @@ npm run doctor
 | --- | --- | --- |
 | `ppt-master` | `vendor/ppt-master/skills/` | 与磁盘内容**逐字节一致**，`source: upstream` |
 | `ppt-master-sci` | `skills/` | 附带一段运行时前言，公布上游路径 |
+| `ppt-master-charts` | `skills/` | 同上——自带技能始终与上游树平级，绝不放进上游 |
+
+一个 provider、两个根目录、三个技能：上游一个，本插件两个。新增自带技能不需要改
+`index.js`，provider 每次列举时按磁盘实际情况读取。
 
 两个细节是承重的：
 
@@ -119,16 +124,80 @@ MinerU 是托管 API，需要 `MINERU_API_TOKEN`（在 <https://mineru.net> 申�
 「已知更弱」的选项交给用户选择。把文本层抽取包装得和 MinerU 等价，
 正是本插件要避免的失效模式：下游的公式清单与表格数值都会明显更差。
 
+## 图表层
+
+`ppt-master-charts` 填的是上游**自己声明的**空白。上游有 33 个**定量**图表参考，
+按「编码的信息关系」编目；而非定量的一切，上游是这么说的：
+
+> 定性结构属于 Slide-local Executor 的方法，**不是一个编目**。
+
+于是金字塔、蜂窝、鱼骨、组织树、泳道、飞轮、维恩交集……全靠临场发挥——
+而临场发挥正是 deck 开始变得「像套模板换字」的地方。
+
+| 组件 | 作用 |
+| --- | --- |
+| `references/archetype-catalog.md` | 结构／流程／对比三类约 110 个定性形式，每条注明它编码的关系、所需的**数据形态**、以及何时不该用 |
+| `references/data-archetypes.md` | 数据类与页面类形式，以及与上游 33 个参考的**桥接**——它们仍归上游，单一归属 |
+| `references/selection.md` | 从「一句话结论」→ 意图 → 原型的路由，附 13 条具名反模式 |
+| `references/craft-rules.md` | 与风格无关的视觉纪律 |
+| `references/style-profiles.md` | 如何推导主题配置 |
+| `references/library-build.md` | 建「图表库」而非做一份 deck |
+| `scripts/chart_plan.py` | 校验 `chart_plan.json`：原型是否存在、数据形态是否成立、数字是否自洽、纪律计数 |
+| `assets/style-profiles/` | 两份示例配置 |
+
+### 「数字必须算得上」——做成机械闸
+
+数据页上最有破坏力的缺陷，是页面**写出的**数字和它下面的图对不上。
+观众一旦抓到一次，就不再相信后面任何一个数。
+
+上游的建议和本技能的设计参考都把它当**叮嘱**处理（"出图前自己复核一遍"）。
+本插件把它变成**闸门**：
+
+```bash
+python3 skills/ppt-master-charts/scripts/chart_plan.py projects/demo/chart_plan.json --fail-on-issue
+```
+
+页面上**写出的**每一个数字——百分比、倍数、合计、差值——都会用这一页自己的数据重算：
+
+```text
+ERROR [p01] '整体转化 12%': states 12% but 成单/1000 = 18%.  (claim-1)
+ERROR [p01] a funnel encodes loss through ordered stages, but values increase
+            at position 2 (100 → 420). Change the form or the data — do not bend
+            the data.  (shape-not-monotonic)
+```
+
+它同时拒绝数据撑不起的形式：递增数据画漏斗、没有交集的维恩、没命名坐标轴的象限、
+权重加不到 1 的加权评分、没有回边的闭环。
+
+### 风格是配置，不是写死
+
+这是让技能**可复用**而不是「一种样子」的关键。
+
+本技能的设计参考把风格写死：一套配色、一种字体、一个画布，逐页当作规则陈述。
+这对**已发布的成品**是对的，对**技能**是错的——那样的技能只会和它遇到的每个品牌打架。
+
+所以形式不含风格，样子放在可替换的配置里：
+
+| | |
+| --- | --- |
+| `neutral-default.json` | **默认**，刻意无彩 |
+| `blue-gray-business.json` | `reference-sample` 示例配置，用来展示「一份完整配置长什么样」。明确不是本插件的主风格，其中每个值都应当被替换 |
+
+解析优先级：用户提供的品牌工作区 → 指定配置 → 依 brief 推导的配置 → `neutral-default`。
+原型编目里没有任何一处写出颜色，并且有一个明确的检验标准：换掉配置后，
+每一个原型仍然可选。
+
 ## 验证
 
 ```bash
-npm test                      # 46 个测试
+npm test                      # 75 个测试
 npm run doctor                # 健康检查
 npm run upstream:verify       # 上游干净且位于 pin 上
 ```
 
 测试覆盖：provider 契约、frontmatter 解析器、SCI 脚本端到端
-（构造一个 MinerU 归档并逐项断言）、仓库不变量，以及版式包与上游工作区形态的一致性。
+（构造一个 MinerU 归档并逐项断言）、图表校验器对**故意埋入的缺陷**逐条命中、
+仓库不变量，以及版式包与上游工作区形态的一致性。
 submodule 或 Python 缺失时相关用例会干净跳过。
 
 ## 环境要求
@@ -137,7 +206,7 @@ submodule 或 Python 缺失时相关用例会干净跳过。
 | --- | --- |
 | Node | ≥ 20（实测 24） |
 | DSH | ≥ 0.1.1-rc.1 |
-| Python 3.9+ | 供 SCI 技能的脚本使用（仅标准库） |
+| Python 3.9+ | 供两个技能的脚本使用（仅标准库） |
 | `MINERU_API_TOKEN` | MinerU 摄取需要；用 `--from-zip` 时可选 |
 | MiKTeX / TeX Live + `dvisvgm` | 可选，仅预览用 |
 
@@ -145,8 +214,9 @@ submodule 或 Python 缺失时相关用例会干净跳过。
 
 上游 ppt-master 为 MIT，版权归 Hugo He；**它并不包含在本仓库中**——
 以下载为 submodule 的形式获取，并自带其许可证。
-两个参考插件影响了设计思路，但未复制任何代码。
-完整记录见 [`NOTICE`](./NOTICE)，其中列出了本插件与 sci-fork 的每一处有意分歧。
+两个参考插件，以及一份用作设计参考的第三方商业图表库，都只影响了设计思路；
+它们的任何内容都没有被复制或再分发。
+完整记录见 [`NOTICE`](./NOTICE)，其中列出了本插件与其参考对象的每一处有意分歧。
 
 ## 许可证
 
