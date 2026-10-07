@@ -7,21 +7,26 @@ DeepSeek Harness 插件，并在**不改动上游任何一个文件**的前提�
 
 ```text
 dsh-ppt-master-plus/
-├── index.js                 DSH 入口：一个 skills provider，两个根目录
+├── index.js                 DSH 入口：skills provider + MinerU 凭据桥
+├── dsh/client.js            浏览器半边：MinerU API Key 设置页
 ├── cordis.patch.yml         挂载插件的 bundle patch
 ├── upstream.lock.json       锁定的上游 commit
 ├── .gitmodules              → vendor/ppt-master
-├── vendor/
-│   └── ppt-master/          ← git submodule。只读，永不修改
-│       └── skills/ppt-master/    上游技能，原样注册
-├── skills/
+├── skills/                  ← 唯一的技能目录。一个根，没有特例
+│   ├── ppt-master/          ← 链接 → vendor/ppt-master/skills/ppt-master（生成）
 │   ├── ppt-master-sci/      ← 科研前端（MinerU、公式、学术版式）
 │   └── ppt-master-charts/   ← 图表/图示选择与视觉纪律
+├── vendor/
+│   └── ppt-master/          ← git submodule。只读，永不修改
 ├── scripts/
 │   ├── upstream.mjs         init / check / sync / verify / status
 │   └── cli.mjs              doctor / skills
-└── tests/                   91 个测试，含「上游保持干净」的不变量
+└── tests/                   94 个测试，含「上游保持干净」的不变量
 ```
+
+`skills/ppt-master` 是指向 submodule 的**链接**，由 `npm run upstream:init` 生成并已加入
+`.gitignore`。文件仍然只存在于 submodule 里（不复制、不重复），但每个技能都在同一个地方被找到，
+没有哪个是特例。
 
 ## 为什么必须是 submodule
 
@@ -72,22 +77,24 @@ npm run doctor
 
 一个 `ctx.skills.registerProvider()`，把两个根目录投影到 `ctx.skills`：
 
-| 技能 | 根目录 | 注册方式 |
+| 技能 | 文件实际在哪 | 注册方式 |
 | --- | --- | --- |
-| `ppt-master` | `vendor/ppt-master/skills/` | 与磁盘内容**逐字节一致**，`source: upstream` |
-| `ppt-master-sci` | `skills/` | 附带一段运行时前言，公布上游路径 |
-| `ppt-master-charts` | `skills/` | 同上——自带技能始终与上游树平级，绝不放进上游 |
+| `ppt-master` | submodule（经链接） | 与磁盘内容**逐字节一致**，不注入前言 |
+| `ppt-master-sci` | `skills/ppt-master-sci/` | 附带一段运行时前言，公布上游路径 |
+| `ppt-master-charts` | `skills/ppt-master-charts/` | 同上 |
 
-一个 provider、两个根目录、三个技能：上游一个，本插件两个。新增自带技能不需要改
-`index.js`，provider 每次列举时按磁盘实际情况读取。
+一个 provider、**一个目录**、三个技能。
 
-两个细节是承重的：
+三个细节是承重的：
 
-- **上游原样注册**——不注入前言、不改路径、不重写任何内容。有测试断言字节相等，
-  因为一旦重写渗进上游投影，`git submodule update --remote` 就不再是干净快进，
-  本插件也就等于「不小心变成了 fork」。
-- **只有我们自己的技能带前言。** 我们的技能在另一棵树里，所以它被告知（可移动的）
-  上游 checkout 在哪，而不是硬编码路径、等它一挪就断。
+- **只有一个根目录。** 早先的设计把 `vendor/ppt-master/skills` 和 `skills/` 并列扫描，并给上游技能
+  换了一个 `source`。DSH **会丢弃 `source` 不认识的技能**——不报错、不打日志。于是插件看起来
+  装好了、一切正常，而 `ppt-master` 在技能中心里根本找不到。现在只有一个目录、所有技能共用
+  同一个 `source`（`bundled`），并有测试把它钉住。
+- **上游依然原样注册**——不注入前言、不改路径。有测试断言字节相等，因为一旦重写渗进上游投影，
+  `git submodule update --remote` 就不再是干净快进，本插件也就等于「不小心变成了 fork」。
+- **技能属于哪棵树，是从文件系统读出来的。** provider 解析每个技能目录的真实路径，
+  判断它是否落在 `vendor/` 里；是则为上游的。没有第二份需要同步维护的清单。
 
 用 provider 而不是 N 次 `register()`：上游某次 `update --remote` 增删了技能时，
 这里一行代码都不用改。

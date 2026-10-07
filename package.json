@@ -82,7 +82,8 @@
     "upstream:verify": "node scripts/upstream.mjs verify",
     "doctor": "node scripts/cli.mjs doctor",
     "test": "node --test \"tests/*.test.mjs\"",
-    "prepare": "node scripts/upstream.mjs init --soft"
+    "prepare": "node scripts/upstream.mjs init --soft",
+    "postinstall": "node scripts/upstream.mjs init --soft"
   },
   "packageManager": "pnpm@11.7.0"
 }

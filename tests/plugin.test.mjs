@@ -20,14 +20,17 @@ import { join } from 'node:path'
 import {
   MINERU_CREDENTIAL_REF,
   MINERU_SHELL_VAR,
+  ORIGIN_METADATA_KEY,
   PROVIDER_NAME,
   PACKAGE_DIR,
   SHELL_ENV_CONTRIBUTOR,
+  SKILLS_DIR,
   UPSTREAM_ENV,
   apply,
   parseFrontmatterYaml,
   parseSkillMarkdown,
   registerMineruShellEnv,
+  resolveSkillOrigin,
   resolveUpstreamDir,
   runtimePreamble,
   skillRoots,
@@ -133,9 +136,16 @@ describe('upstream projection', { skip: !HAS_UPSTREAM ? 'upstream submodule not 
       !definition.content.includes('Runtime paths (injected by'),
       'the runtime preamble must never be injected into upstream',
     )
-    assert.equal(definition.source, 'upstream')
+    assert.equal(
+      definition.source,
+      'bundled',
+      'source must be a value DSH recognises, or the skill vanishes from every consumer',
+    )
+    assert.equal(definition.metadata[ORIGIN_METADATA_KEY], 'upstream')
     assert.equal(definition.provider, PROVIDER_NAME)
-    assert.equal(definition.resourceBase.path, join(UPSTREAM_DIR, 'skills', 'ppt-master'))
+    // Discovered in skills/, like every other skill; the link is what points it
+    // at the submodule, so relative paths in its own SKILL.md still resolve.
+    assert.equal(definition.resourceBase.path, join(SKILLS_DIR, 'ppt-master'))
   })
 
   test('projects the bundled skill with the runtime preamble', async () => {
@@ -143,6 +153,7 @@ describe('upstream projection', { skip: !HAS_UPSTREAM ? 'upstream submodule not 
     const definition = await getSkill(provider, 'ppt-master-sci')
     assert.ok(definition)
     assert.equal(definition.source, 'bundled')
+    assert.equal(definition.metadata[ORIGIN_METADATA_KEY], 'plugin')
     assert.ok(
       definition.content.startsWith('## Runtime paths (injected by the dsh-ppt-master-plus plugin)'),
       'bundled skills must carry the path bridge',
@@ -150,13 +161,46 @@ describe('upstream projection', { skip: !HAS_UPSTREAM ? 'upstream submodule not 
     assert.ok(definition.content.includes(UPSTREAM_DIR), 'the bridge must publish the upstream root')
   })
 
-  test('ranks bundled above upstream so a local skill can shadow without editing either tree', () => {
-    const roots = skillRoots('/tmp/does-not-need-to-exist')
-    const bundled = roots.find((root) => root.source === 'bundled')
-    const upstream = roots.find((root) => root.source === 'upstream')
-    assert.ok(bundled.rank > upstream.rank)
-    assert.equal(bundled.preamble, true)
-    assert.equal(upstream.preamble, false)
+  test('scans exactly one skills root', () => {
+    // A second, privileged root is what made the upstream skill unfindable: it
+    // carried a different `source`, and DSH drops an unrecognised source from
+    // its snapshot without an error, so the skill existed everywhere in this
+    // plugin's head and nowhere in any consumer.
+    const roots = skillRoots()
+    assert.equal(roots.length, 1, 'one skills directory, no special cases')
+    assert.equal(roots[0].dir, SKILLS_DIR)
+  })
+
+  test('every skill is projected with a source DSH recognises', async () => {
+    const recognised = new Set(['bundled', 'project', 'user', 'custom', 'runtime'])
+    const provider = captureProvider()
+    for (const candidate of await provider.list({})) {
+      const definition = await getSkill(provider, candidate.name)
+      assert.ok(
+        recognised.has(definition.source),
+        `${definition.name} reports source "${definition.source}", which no consumer groups on`,
+      )
+    }
+  })
+
+  test('classifies a skill by where its files really live', async () => {
+    // The link is what carries the fact, so nothing has to be configured twice.
+    const upstream = await resolveSkillOrigin(join(SKILLS_DIR, 'ppt-master'))
+    const ours = await resolveSkillOrigin(join(SKILLS_DIR, 'ppt-master-sci'))
+
+    assert.equal(upstream.origin, 'upstream')
+    assert.equal(upstream.preamble, false, 'upstream must stay byte-identical')
+    assert.equal(ours.origin, 'plugin')
+    assert.equal(ours.preamble, true, 'our skills need the path bridge')
+    assert.ok(ours.rank > upstream.rank, 'a local skill may shadow an upstream one')
+  })
+
+  test('treats an unresolvable directory as ours, never as upstream', async () => {
+    // Excusing a broken directory from the byte-identical guarantee would be
+    // the wrong way round: it would hide a problem rather than surface it.
+    const missing = await resolveSkillOrigin(join(SKILLS_DIR, 'does-not-exist'))
+    assert.equal(missing.origin, 'plugin')
+    assert.equal(missing.preamble, true)
   })
 
   test('the upstream SKILL.md parses with its own name and description', async () => {

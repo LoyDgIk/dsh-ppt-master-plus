@@ -88,13 +88,19 @@ function readLock() {
 /**
  * List skills under a root.
  *
+ * Symlinks and junctions count as skills: the upstream skill reaches this
+ * directory through one, and `Dirent.isDirectory()` is false for a link even
+ * when it resolves to a directory — so filtering on `isDirectory()` alone would
+ * hide exactly the skill this layout exists to make visible.
+ *
  * @param root - directory holding `<skill>/SKILL.md` entries.
  * @returns skill directory names.
  */
 function listSkills(root) {
   if (!existsSync(root)) return []
   return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && existsSync(join(root, entry.name, 'SKILL.md')))
+    .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink())
+      && existsSync(join(root, entry.name, 'SKILL.md')))
     .map((entry) => entry.name)
     .sort()
 }
@@ -136,10 +142,31 @@ function doctor() {
   }
 
   console.log('\nSkills')
-  const upstreamSkills = listSkills(join(UPSTREAM_DIR, 'skills'))
-  const bundledSkills = listSkills(join(PACKAGE_DIR, 'skills'))
-  report(upstreamSkills.length > 0 ? OK : WARN, 'upstream skills', upstreamSkills.join(', ') || 'none')
-  report(bundledSkills.length > 0 ? OK : WARN, 'bundled skills', bundledSkills.join(', ') || 'none')
+  // One directory. The upstream skill is reached through a link inside it, so
+  // listing per-tree would reintroduce the split this layout removes.
+  const skills = listSkills(join(PACKAGE_DIR, 'skills'))
+  report(skills.length > 0 ? OK : WARN, 'skills', skills.join(', ') || 'none')
+
+  // Find skills the provider will actually see: a directory without a readable
+  // SKILL.md is invisible everywhere, and a dangling link is the usual cause.
+  const unreadable = []
+  for (const name of skills) {
+    const file = join(PACKAGE_DIR, 'skills', name, 'SKILL.md')
+    try {
+      if (readFileSync(file, 'utf8').trim() === '') unreadable.push(name)
+    } catch {
+      unreadable.push(name)
+    }
+  }
+  if (unreadable.length > 0) {
+    report(
+      BAD,
+      'skill files',
+      `${unreadable.join(', ')} — SKILL.md is unreadable (a dangling link means upstream:init has not run)`,
+    )
+  } else {
+    report(OK, 'skill files', 'every skill has a readable SKILL.md')
+  }
 
   console.log('\nOptional toolchain (SCI skill)')
   const python = findPython()

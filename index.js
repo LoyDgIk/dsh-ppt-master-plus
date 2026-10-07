@@ -27,8 +27,8 @@
  * @module dsh-ppt-master-plus
  */
 
-import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readdir, readFile, realpath } from 'node:fs/promises'
+import { join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** Provider id reported on every projected skill. */
@@ -66,32 +66,87 @@ const SKILL_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 export const UPSTREAM_ENV = 'DSH_PPT_MASTER_PLUS_UPSTREAM'
 
 /**
- * The two roots the provider scans, in priority order.
+ * Source reported for every skill this plugin projects.
  *
- * `preamble: true` marks the roots whose skill bodies get the runtime
- * bridge. Upstream must never receive one: byte-identical content is what
- * makes "we did not modify upstream" externally checkable.
+ * This MUST be a value DSH recognises. An invented one is not rejected with an
+ * error — the skill is simply absent from `skills.snapshot()`, so it never
+ * reaches any consumer: not the skill centre, not the model's catalog. The
+ * plugin looks installed and healthy while one of its skills is invisible, with
+ * nothing anywhere to say so. That is exactly what happened when this was
+ * `'upstream'`.
+ */
+const SKILL_SOURCE = 'bundled'
+
+/**
+ * Metadata key recording where a skill's files actually live: `upstream` (the
+ * read-only submodule) or `plugin` (this repository).
+ */
+export const ORIGIN_METADATA_KEY = 'origin'
+
+/** The one skills directory. */
+export const SKILLS_DIR = join(PACKAGE_DIR, 'skills')
+
+/** Where the upstream checkout lives, and what marks a skill as upstream's. */
+export const VENDOR_DIR = join(PACKAGE_DIR, 'vendor')
+
+/**
+ * Every skills root the provider scans: exactly one.
  *
- * @param upstreamDir - absolute path of the upstream checkout.
+ * Why one root: an earlier version scanned `vendor/ppt-master/skills` beside
+ * this one and treated the two differently. That made the upstream skill a
+ * special case — it lived somewhere no other skill lived, and it carried a
+ * different `source`, which made DSH drop it from its snapshot silently. A
+ * plugin whose skills are found by looking in one place is easier to reason
+ * about than one with a second, privileged location.
+ *
+ * Upstream still reaches this directory as a **link** created by
+ * `upstream:init`, never as a copy, so upstream stays a pristine submodule and
+ * `git submodule update --remote` stays a fast-forward. Which tree a skill
+ * really lives in is then read off the filesystem
+ * ({@link resolveSkillOrigin}) instead of being configured here.
+ *
  * @returns the root descriptors.
  */
-export function skillRoots(upstreamDir) {
-  return [
-    {
-      dir: join(upstreamDir, 'skills'),
-      source: 'upstream',
-      rank: RANK_UPSTREAM,
-      preamble: false,
-      label: 'upstream',
-    },
-    {
-      dir: join(PACKAGE_DIR, 'skills'),
-      source: 'bundled',
-      rank: RANK_BUNDLED,
-      preamble: true,
-      label: 'bundled',
-    },
-  ]
+export function skillRoots() {
+  return [{ dir: SKILLS_DIR, label: 'skills' }]
+}
+
+/**
+ * Decide whether a skill directory belongs to upstream, by where it resolves.
+ *
+ * The link is what carries the fact: a skill whose real path lands inside
+ * `vendor/` is upstream's, so it is registered verbatim and never gets the
+ * runtime bridge — byte-identical content is what makes "we did not modify
+ * upstream" externally checkable. Everything else is ours.
+ *
+ * Detecting it this way rather than configuring it means there is no second
+ * list to keep in step with the filesystem.
+ *
+ * @param dir - the skill directory to classify.
+ * @returns `{ origin, rank, preamble }`.
+ */
+export async function resolveSkillOrigin(dir) {
+  let real
+  try {
+    real = await realpath(dir)
+  } catch {
+    // A missing or dangling directory is treated as ours: it will fail to read
+    // its SKILL.md and be skipped anyway, and guessing "upstream" would excuse
+    // it from the byte-identical guarantee.
+    return { origin: 'plugin', rank: RANK_BUNDLED, preamble: true }
+  }
+
+  let vendorReal
+  try {
+    vendorReal = await realpath(VENDOR_DIR)
+  } catch {
+    vendorReal = VENDOR_DIR
+  }
+
+  const upstream = real === vendorReal || real.startsWith(vendorReal + sep)
+  return upstream
+    ? { origin: 'upstream', rank: RANK_UPSTREAM, preamble: false }
+    : { origin: 'plugin', rank: RANK_BUNDLED, preamble: true }
 }
 
 /**
@@ -153,7 +208,7 @@ export function runtimePreamble(paths) {
  */
 export function apply(ctx) {
   const upstreamDir = resolveUpstreamDir()
-  const roots = skillRoots(upstreamDir)
+  const roots = skillRoots()
 
   ctx.skills.registerProvider(() => ({
     name: PROVIDER_NAME,
@@ -318,7 +373,7 @@ export function registerMineruShellEnv(ctx) {
  *
  * @param roots - root descriptors from {@link skillRoots}.
  * @param upstreamDir - absolute upstream checkout, for the bridge preamble.
- * @returns every discoverable skill, deduplicated by name (bundled wins).
+ * @returns every discoverable skill, deduplicated by name (plugin wins).
  */
 async function loadAllRoots(roots, upstreamDir) {
   const upstreamSkillDir = join(upstreamDir, 'skills', 'ppt-master')
@@ -332,7 +387,7 @@ async function loadAllRoots(roots, upstreamDir) {
     try {
       entries = await readdir(root.dir, { withFileTypes: true })
     } catch {
-      continue // root missing — expected before `upstream:init`
+      continue // no skills directory yet
     }
 
     for (const entry of entries) {
@@ -348,22 +403,28 @@ async function loadAllRoots(roots, upstreamDir) {
       }
 
       const parsed = parseSkillMarkdown(raw, skillFile)
+      const { origin, rank, preamble: wantsPreamble } = await resolveSkillOrigin(dir)
+
+      // Higher rank wins a name collision, so a local skill silently shadows an
+      // upstream one without either tree being edited.
       const existing = byName.get(parsed.name)
-      // Roots are ordered highest-priority-first; the first writer wins.
-      if (existing !== undefined && existing.rank >= root.rank) continue
+      if (existing !== undefined && existing.rank >= rank) continue
 
       byName.set(parsed.name, {
         name: parsed.name,
         description: parsed.description,
-        ...(parsed.metadata !== undefined ? { metadata: parsed.metadata } : {}),
+        // Which tree the skill came from rides in metadata, never in `source`:
+        // an unrecognised source value makes DSH drop the skill from its
+        // snapshot entirely, which is silent — see SKILL_SOURCE.
+        metadata: { ...(parsed.metadata ?? {}), [ORIGIN_METADATA_KEY]: origin },
         invocation: parsed.invocation,
         provider: PROVIDER_NAME,
-        source: root.source,
+        source: SKILL_SOURCE,
         resourceBase: { kind: 'directory', path: dir },
-        rank: root.rank,
+        rank,
         locator: skillFile,
         path: skillFile,
-        content: root.preamble ? `${preamble}\n\n${parsed.body}` : parsed.body,
+        content: wantsPreamble ? `${preamble}\n\n${parsed.body}` : parsed.body,
       })
     }
   }

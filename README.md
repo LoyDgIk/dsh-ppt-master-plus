@@ -15,17 +15,22 @@ dsh-ppt-master-plus/
 ├── cordis.patch.yml         bundle patch that mounts the plugin
 ├── upstream.lock.json       the pinned upstream commit
 ├── .gitmodules              → vendor/ppt-master
-├── vendor/
-│   └── ppt-master/          ← git submodule. READ-ONLY. never edited.
-│       └── skills/ppt-master/    upstream skill, registered verbatim
-├── skills/
+├── skills/                  ← THE skills directory. one root, no special cases.
+│   ├── ppt-master/          ← link → vendor/ppt-master/skills/ppt-master (generated)
 │   ├── ppt-master-sci/      ← scientific front end (MinerU, formulas, academic layouts)
 │   └── ppt-master-charts/   ← chart/diagram selection and visual discipline
+├── vendor/
+│   └── ppt-master/          ← git submodule. READ-ONLY. never edited.
 ├── scripts/
 │   ├── upstream.mjs         init / check / sync / verify / status
 │   └── cli.mjs              doctor / skills
-└── tests/                   91 tests, including the "upstream is pristine" invariants
+└── tests/                   94 tests, including the "upstream is pristine" invariants
 ```
+
+`skills/ppt-master` is a **link** into the submodule, created by
+`npm run upstream:init` and gitignored. The files stay in the submodule — nothing
+is duplicated — but every skill is discovered in the same place, so none of them
+is a special case.
 
 ## Why a submodule, and why that matters
 
@@ -87,29 +92,38 @@ npm run doctor
 [ok  ] upstream checkout: .../vendor/ppt-master
 [ok  ] pinned commit: 440557b8dc7c
 [ok  ] pristine: no local modifications
-[ok  ] upstream skills: ppt-master
-[ok  ] bundled skills: ppt-master-sci
+[ok  ] skills: ppt-master, ppt-master-charts, ppt-master-sci
+[ok  ] settings page: dsh/client.js present
 ```
+
+The `doctor` `skills` line lists one directory, not two: that is the point of
+the layout.
 
 ## What the plugin registers
 
-One `ctx.skills.registerProvider()` projecting two roots onto `ctx.skills`:
+One `ctx.skills.registerProvider()` over **one directory**, `skills/`:
 
-| Skill | Root | Registered as |
+| Skill | Files live in | Registered as |
 | --- | --- | --- |
-| `ppt-master` | `vendor/ppt-master/skills/` | **Byte-for-byte** as it exists on disk, `source: upstream` |
-| `ppt-master-sci` | `skills/` | With a runtime preamble that publishes the upstream paths |
-| `ppt-master-charts` | `skills/` | Same — bundled skills are siblings of the upstream tree, never inside it |
+| `ppt-master` | the submodule, via the link | **Byte-for-byte**, no preamble |
+| `ppt-master-sci` | `skills/ppt-master-sci/` | With a runtime preamble that publishes the upstream paths |
+| `ppt-master-charts` | `skills/ppt-master-charts/` | Same |
 
-Two details carry weight:
+Three details carry weight:
 
-- **Upstream is registered verbatim** — no injected preamble, no path fixup, no
-  rewriting. A test asserts byte equality, because the moment a rewrite leaks
-  into the upstream projection, a `git submodule update --remote` stops being a
-  clean fast-forward and this plugin has become a fork by accident.
-- **Only our own skills get the preamble.** Ours live in a different tree, so
-  they are told where the (movable) upstream checkout is, rather than
-  hard-coding paths that break the moment it moves.
+- **One root.** An earlier design scanned `vendor/ppt-master/skills` beside
+  `skills/` and gave the upstream skill a different `source`. DSH **drops a skill
+  whose `source` it does not recognise**, silently — no error, no log. The
+  plugin looked installed and healthy while `ppt-master` could not be found in
+  the skill centre at all. There is now one directory and one `source` value
+  (`bundled`) for every skill, and a test pins that.
+- **Upstream is still registered verbatim** — no injected preamble, no path
+  fixup. A test asserts byte equality, because the moment a rewrite leaks into
+  the upstream projection, `git submodule update --remote` stops being a clean
+  fast-forward and this plugin has become a fork by accident.
+- **Which tree a skill belongs to is read off the filesystem.** The provider
+  resolves each skill directory and asks whether it lands inside `vendor/`; if
+  it does, the skill is upstream's. There is no second list to keep in step.
 
 A provider rather than N `register()` calls, so a `git submodule update
 --remote` that adds or removes an upstream skill takes effect with no code

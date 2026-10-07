@@ -30,5 +30,11 @@ previews/
 *.zip
 projects/
 
+# `skills/ppt-master` is a link into the upstream submodule, created by
+# `npm run upstream:init` so that every skill lives in one directory. It is
+# generated, and the files belong to the submodule — committing it would both
+# duplicate upstream and turn the fast-forward sync into a conflict.
+skills/ppt-master
+
 # upstream.lock.json is deliberately NOT ignored: the pinned commit is part of
 # the contract and must be reviewable in the diff of every sync.

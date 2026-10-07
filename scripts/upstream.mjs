@@ -26,8 +26,8 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -182,24 +182,117 @@ function registerSubmodule() {
 }
 
 /**
- * Plain clone fallback for installs that are not a git checkout (npm tarball).
+ * Clone the upstream checkout for an install that is not a git checkout.
  *
- * Uses a blobless clone so a full 130 MB history is never transferred, then a
- * depth-1 fetch of the exact ref.
+ * This is the path an npm/pnpm install takes, and it is the one that matters
+ * most in practice: npm never fetches submodules and `vendor/` is not part of
+ * the published files, so a freshly installed plugin has **no upstream
+ * checkout at all**. Provisioning is therefore not an optimisation here, it is
+ * what makes the upstream skill exist.
  *
- * @param ref - branch or commit to check out.
+ * `--branch <ref>` only accepts a branch or tag, so it cannot be used with the
+ * commit SHA that `upstream.lock.json` records. Fetching the SHA directly is
+ * the supported way to shallow-clone one commit, and GitHub serves it.
+ *
+ * @param ref - branch, tag, or commit to check out.
  */
 function cloneDirect(ref) {
-  console.log(`[upstream] cloning ${UPSTREAM_REPO} → ${UPSTREAM_SUBPATH} (blobless)`)
-  mkdirSync(dirname(UPSTREAM_DIR), { recursive: true })
+  console.log(`[upstream] cloning ${UPSTREAM_REPO} → ${UPSTREAM_SUBPATH} (blobless, depth 1)`)
+  mkdirSync(UPSTREAM_DIR, { recursive: true })
   rmSync(UPSTREAM_DIR, { recursive: true, force: true })
-  const clone = run(
+  mkdirSync(UPSTREAM_DIR, { recursive: true })
+
+  const init = run('git', ['init', '--quiet', UPSTREAM_DIR], { cwd: PACKAGE_DIR })
+  if (!init.ok) throw new Error(`git init failed:\n${init.stderr || init.stdout}`)
+
+  const remote = run('git', ['remote', 'add', 'origin', UPSTREAM_REPO], { cwd: UPSTREAM_DIR })
+  if (!remote.ok) throw new Error(`git remote add failed:\n${remote.stderr || remote.stdout}`)
+
+  // Blobless + depth 1 so a 130 MB history is never transferred.
+  const fetch = run(
     'git',
-    ['clone', '--filter=blob:none', '--no-checkout', '--depth', '1', '--branch', ref, UPSTREAM_REPO, UPSTREAM_DIR],
-    { cwd: PACKAGE_DIR },
+    ['fetch', '--filter=blob:none', '--depth', '1', 'origin', ref],
+    { cwd: UPSTREAM_DIR },
   )
-  if (!clone.ok) throw new Error(`clone failed:\n${clone.stderr || clone.stdout}`)
-  git(['checkout', ref], UPSTREAM_DIR)
+  if (!fetch.ok) {
+    // A shallow fetch of an older commit can be refused; fall back to the tip
+    // of the tracked branch and say so, rather than failing with no way out.
+    console.warn(`[upstream] could not fetch ${ref.slice(0, 12)}; falling back to the branch tip`)
+    const fallback = run('git', ['fetch', '--filter=blob:none', '--depth', '1', 'origin', UPSTREAM_REF], {
+      cwd: UPSTREAM_DIR,
+    })
+    if (!fallback.ok) throw new Error(`clone failed:\n${fallback.stderr || fallback.stdout}`)
+  }
+
+  const checkout = run('git', ['checkout', '--detach', 'FETCH_HEAD'], { cwd: UPSTREAM_DIR })
+  if (!checkout.ok) throw new Error(`checkout failed:\n${checkout.stderr || checkout.stdout}`)
+}
+
+// ─── skill link ─────────────────────────────────────────────────────────
+
+/** Upstream's skill directory, relative to the checkout root. */
+const UPSTREAM_SKILL_REL = join('skills', 'ppt-master')
+
+/** Where that skill is exposed so every skill lives in one directory. */
+const SKILL_LINK = join(PACKAGE_DIR, 'skills', 'ppt-master')
+
+/**
+ * Expose upstream's skill inside `skills/` as a link.
+ *
+ * The provider scans exactly one directory, so a skill that lives anywhere else
+ * is a special case — and the earlier two-root arrangement proved it: the
+ * upstream skill carried a different `source`, DSH dropped it from its snapshot
+ * without a word, and it could not be found in the skill centre at all.
+ *
+ * A link rather than a copy, so upstream stays a pristine submodule and a
+ * 70 MB skill tree is not duplicated. `skills/ppt-master` is gitignored: it is
+ * generated, and the files belong to the submodule.
+ *
+ * Idempotent, and never fatal — a platform that refuses to create links leaves
+ * the plugin with two skills instead of three, which is worth a warning, not a
+ * failed install.
+ *
+ * @param opts - `soft` downgrades failures to warnings.
+ * @returns true when the link exists afterwards.
+ */
+export function ensureSkillLink(opts = {}) {
+  const target = join(UPSTREAM_DIR, UPSTREAM_SKILL_REL)
+
+  if (!existsSync(target)) {
+    const message = `cannot link the upstream skill: ${target} is missing (run upstream:init first)`
+    if (opts.soft === true) {
+      console.warn(`[upstream] ${message}`)
+      return false
+    }
+    throw new Error(message)
+  }
+
+  if (existsSync(SKILL_LINK)) {
+    console.log(`[upstream] skill link already present: ${relative(PACKAGE_DIR, SKILL_LINK)}`)
+    return true
+  }
+
+  mkdirSync(dirname(SKILL_LINK), { recursive: true })
+
+  try {
+    if (process.platform === 'win32') {
+      // A junction needs no elevation, unlike a symbolic link on Windows.
+      const result = run('cmd', ['/c', 'mklink', '/J', SKILL_LINK, target])
+      if (!result.ok) throw new Error(result.stderr || result.stdout || 'mklink failed')
+    } else {
+      symlinkSync(target, SKILL_LINK, 'dir')
+    }
+    console.log(`[upstream] linked ${relative(PACKAGE_DIR, SKILL_LINK)} -> ${relative(PACKAGE_DIR, target)}`)
+    return true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (opts.soft === true) {
+      console.warn(`[upstream] could not link the upstream skill: ${message}`)
+      console.warn('[upstream] the plugin will expose only its own skills')
+      return false
+    }
+    throw new Error(`could not create the skill link: ${message}`)
+  }
 }
 
 // ─── commands ───────────────────────────────────────────────────────────
@@ -221,6 +314,9 @@ export function cmdInit(opts = {}) {
           `${lock.upstream.commit.slice(0, 12)}. Run \`npm run upstream:sync\` to move the pin deliberately.`,
       )
     }
+    // The link is what puts the upstream skill where the provider looks, so it
+    // is repaired on every init rather than only on a fresh checkout.
+    ensureSkillLink(opts)
     return 0
   }
 
@@ -259,6 +355,7 @@ export function cmdInit(opts = {}) {
   }
 
   const head = upstreamHead()
+  ensureSkillLink(opts)
   console.log(`[upstream] ready at ${head?.slice(0, 12)}`)
   return 0
 }
