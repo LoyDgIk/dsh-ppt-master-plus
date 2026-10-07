@@ -157,3 +157,76 @@ provider reads it at registration; the `upstream:*` scripts keep operating on
 
 Gate on `verify` and `test`. Treat `check` exit 2 as a routine notification, not
 a build failure — otherwise every upstream release turns CI red.
+
+## Deck projects must not be created inside the checkout
+
+The one upstream behaviour that fights this layout, and the one easiest to miss.
+
+### What happens
+
+Upstream derives its project destination from its own location:
+
+```python
+# skills/ppt-master/scripts/project_management/paths.py
+SKILL_DIR     = SCRIPTS_DIR.parent
+REPO_ROOT     = SKILL_DIR.parent.parent
+PROJECTS_ROOT = REPO_ROOT / "projects"
+```
+
+So `project_manager.py init <name>` creates the deck at
+`vendor/ppt-master/projects/<name>/` — inside the read-only reference. There is
+**no environment variable** to redirect it; `REPO_ROOT` is computed from
+`__file__`.
+
+### Why it goes unnoticed
+
+Upstream's own `.gitignore` contains:
+
+```gitignore
+projects/*
+!projects/README.md
+```
+
+Everything the initializer writes there is therefore **ignored by git**. The
+checkout reports a clean `git status`, `git submodule update --remote` proceeds
+happily, and the first sign of trouble is someone listing the directory.
+
+That is why `verify` does not stop at `git status`. It also runs
+`git clean -ndX -- projects`, which lists the ignored paths that *exist*. The
+question actually being asked is "was anything written here?"; tracked
+cleanliness is a different question that happens to agree when nothing is wrong.
+
+### The fix
+
+`init` accepts `--dir`. Always pass it:
+
+```bash
+python3 <upstream>/skills/ppt-master/scripts/project_manager.py init <name> \
+  --dir <workspace>/ppt-decks
+```
+
+`project_name` must stay a single path component — no separators, not absolute —
+so `--dir` is the only lever. Every other subcommand (`import-sources`,
+`validate`, `info`, `page-context`, …) takes an explicit project path, so once
+the project exists outside the checkout nothing else needs redirecting.
+
+### How this is enforced
+
+| Layer | What it does |
+| --- | --- |
+| **System prompt** | The plugin registers a short section naming the checkout and the `--dir` form. It reaches every model step — including a run that loads upstream's `ppt-master` alone, which the plugin's skill preamble cannot cover, because that skill is registered verbatim. |
+| **`verify`** | Fails (exit 2), prints the offending paths, and prints the `mv` that fixes them. |
+| **`sync`** | Refuses to run while generated files are present. |
+| **`test`** | Asserts the checkout holds nothing generated, and plants a probe to prove the check can actually fail. |
+
+### If it has already happened
+
+```bash
+mkdir -p <workspace>/ppt-decks
+mv vendor/ppt-master/projects/<name> <workspace>/ppt-decks/
+npm run upstream:verify
+```
+
+The project itself is fine — it is an ordinary deck directory and every upstream
+command accepts it by path. Only its location was wrong.
+

@@ -21,6 +21,7 @@ import {
   MINERU_CREDENTIAL_REF,
   MINERU_SHELL_VAR,
   ORIGIN_METADATA_KEY,
+  PROMPT_SECTION,
   PROVIDER_NAME,
   PACKAGE_DIR,
   SHELL_ENV_CONTRIBUTOR,
@@ -29,6 +30,7 @@ import {
   apply,
   parseFrontmatterYaml,
   parseSkillMarkdown,
+  registerDeckProjectsPrompt,
   registerMineruShellEnv,
   resolveSkillOrigin,
   resolveUpstreamDir,
@@ -619,5 +621,77 @@ describe('settings page client half', () => {
     }
     assert.equal(registered.length, 0, 'no page may be mounted without credential access')
     assert.ok(errors.some((line) => line.includes('connection')), 'and it must say why')
+  })
+})
+
+describe('deck project guardrail', () => {
+  /**
+   * Capture the prompt section the plugin registers.
+   *
+   * @returns `{ sections, register }`.
+   */
+  function captureSection() {
+    const sections = []
+    registerDeckProjectsPrompt(
+      { get: (name) => (name === 'systemPrompt' ? { section: (s) => { sections.push(s); return () => {} } } : undefined) },
+      UPSTREAM_DIR,
+    )
+    return sections
+  }
+
+  test('tells every model step not to create decks in the checkout', () => {
+    // This is the case a skill note cannot reach: upstream's skill is registered
+    // verbatim, so the runtime preamble never arrives on a run that loads
+    // `ppt-master` alone — which is exactly the run that writes into the
+    // checkout. A prompt section is the only place that covers it.
+    const sections = captureSection()
+    assert.equal(sections.length, 1)
+
+    const section = sections[0]
+    assert.equal(section.name, PROMPT_SECTION)
+    assert.ok(Number.isFinite(section.order), 'DSH rejects a non-finite section order')
+    assert.match(section.text, /Never create a deck inside the ppt-master reference checkout/)
+    assert.match(
+      section.text,
+      /--dir/,
+      'the rule is useless without the flag that makes it satisfiable',
+    )
+  })
+
+  test('names the real initializer path and the gitignore trap', () => {
+    const [section] = captureSection()
+    assert.ok(
+      section.text.includes(join(UPSTREAM_DIR, 'skills', 'ppt-master', 'scripts', 'project_manager.py')),
+      'the command must be runnable as printed',
+    )
+    assert.match(section.text, /gitignored/, 'say why the mistake is invisible')
+    assert.match(section.text, /git status/)
+  })
+
+  test('stays short enough to belong in a system prompt', () => {
+    const [section] = captureSection()
+    assert.ok(section.text.split('\n').length <= 16, 'a prompt section is not free space')
+  })
+
+  test('is optional — a profile without the service still loads', () => {
+    assert.doesNotThrow(() => registerDeckProjectsPrompt({ get: () => undefined }, UPSTREAM_DIR))
+    assert.doesNotThrow(() => registerDeckProjectsPrompt({}, UPSTREAM_DIR))
+  })
+
+  test('a misbehaving service cannot stop the plugin loading', () => {
+    const errors = []
+    const original = console.error
+    console.error = (message) => errors.push(String(message))
+    try {
+      assert.doesNotThrow(() =>
+        registerDeckProjectsPrompt(
+          { get: () => ({ section: () => { throw new Error('boom') } }) },
+          UPSTREAM_DIR,
+        ),
+      )
+    } finally {
+      console.error = original
+    }
+    assert.ok(errors.some((line) => line.includes('boom')))
   })
 })

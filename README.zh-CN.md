@@ -53,6 +53,30 @@ npm run upstream:verify    # 证明上游干净（exit 2 = 不变量已破）
 「我们从不修改上游」这条不变量就已经破了，此时快进要么静默丢改动，要么以难懂的方式失败。
 它同时把 gitlink 和 lock 文件一起 staged，让这次升级成为**一个可审阅的 diff**。
 
+### 上游唯一一个和这套布局冲突的行为
+
+上游从自身位置推导项目目录 —— `PROJECTS_ROOT = REPO_ROOT / "projects"` ——
+所以 `project_manager.py init <name>` 会把 deck 写进**只读的上游检出目录**，
+而且**没有任何环境变量可以改**。
+
+它还被上游 gitignore 了（`projects/*`、`!projects/README.md`），所以写进去的东西
+**在 `git status` 里完全看不见**：检出目录看起来干干净净，里面却躺着一个 deck。
+这就是 `verify` 还要跑 `git clean -ndX -- projects` 的原因——
+「这里被写过东西吗」和「树干净吗」是两个问题，只有前一个要命。
+
+官方出口是 `init --dir`，插件在能说的每个地方都说了：
+
+- **系统提示段落**——覆盖每一个模型步骤，包括只加载上游 `ppt-master` 的运行；
+- 两个自带技能的**运行时前言**；
+- **`verify`**（exit 2）与 **`sync`**（拒绝执行），并直接给出修复用的 `mv`。
+
+```bash
+python3 vendor/ppt-master/skills/ppt-master/scripts/project_manager.py \
+  init my-deck --dir <工作区>/ppt-decks
+```
+
+完整说明见 [`docs/upstream-sync.md`](docs/upstream-sync.md)。
+
 `verify` 是这条声明的可执行版本，检查三件事：checkout 位于锁定的 commit、没有本地改动、
 父仓库在 `vendor/` 下除了 gitlink 什么都没跟踪。CI 可以据此卡门，
 `tests/upstream.test.mjs` 跑的就是同一组检查。

@@ -61,10 +61,38 @@ is already broken, and fast-forwarding would silently discard work or fail
 confusingly. It also stages the gitlink and the lock file together, so the bump
 is one reviewable diff.
 
-`verify` is the enforceable version of the claim. It checks three things: the
-checkout is at the pinned commit, it has no local modifications, and the parent
-repo tracks nothing inside `vendor/` except the gitlink. CI can gate on it, and
+`verify` is the enforceable version of the claim. It checks four things: the
+checkout is at the pinned commit, it has no local modifications, the parent repo
+tracks nothing inside `vendor/` except the gitlink, and **nothing has been
+generated inside the checkout**. CI can gate on it, and
 `tests/upstream.test.mjs` runs the same checks.
+
+### The one upstream behaviour that fights this
+
+Upstream computes its projects directory from its own location —
+`PROJECTS_ROOT = REPO_ROOT / "projects"` — so `project_manager.py init <name>`
+writes a deck **inside the read-only checkout**, and there is no environment
+variable to redirect it.
+
+It is gitignored (`projects/*`, `!projects/README.md`), so what it writes is
+invisible to `git status`: the checkout looks pristine while a deck sits inside
+it. That is why `verify` also runs `git clean -ndX -- projects` — "was anything
+written here?" is a different question from "is the tree clean?", and only the
+first one matters.
+
+The supported way out is `init --dir`, and the plugin says so everywhere it can:
+
+- a **system-prompt section**, which reaches every model step including a run
+  that loads upstream's `ppt-master` alone;
+- the **runtime preamble** on both bundled skills;
+- **`verify`** (exit 2) and **`sync`** (refuses), with the `mv` that fixes it.
+
+```bash
+python3 vendor/ppt-master/skills/ppt-master/scripts/project_manager.py \
+  init my-deck --dir <workspace>/ppt-decks
+```
+
+Full detail in [`docs/upstream-sync.md`](docs/upstream-sync.md).
 
 ## Install
 

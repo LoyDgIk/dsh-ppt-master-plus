@@ -15,9 +15,13 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+// The generated-file check lives in the tooling, and is imported rather than
+// reimplemented so the test cannot drift from what `verify` actually runs.
+import { upstreamGeneratedLines } from '../scripts/upstream.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = join(HERE, '..')
@@ -78,6 +82,41 @@ describe('upstream is pristine', { skip: SKIP }, () => {
   test('the upstream skill tree is present and unchanged in shape', () => {
     assert.ok(existsSync(join(UPSTREAM_DIR, 'skills', 'ppt-master', 'SKILL.md')))
     assert.ok(existsSync(join(UPSTREAM_DIR, 'skills', 'ppt-master', 'references', 'native-formula.md')))
+  })
+
+  test('nothing has been generated inside the checkout', () => {
+    // Upstream gitignores projects/*, so its initializer writing a deck there
+    // leaves `git status` completely clean. Tracked cleanliness is not the same
+    // question as "was anything written here", and only the second one matters.
+    assert.deepEqual(
+      upstreamGeneratedLines(),
+      [],
+      'a deck created by upstream\'s initializer must not sit in the checkout — pass --dir',
+    )
+  })
+
+  test('the generated-file check actually detects one', () => {
+    // The check above is only worth anything if it can fail. Plant exactly what
+    // the initializer would create and confirm it is seen, then remove it.
+    const probe = join(UPSTREAM_DIR, 'projects', 'dsh-ppt-test-probe')
+    mkdirSync(probe, { recursive: true })
+    writeFileSync(join(probe, 'project.json'), '{"probe":true}', 'utf8')
+    try {
+      // Confirm the premise: git itself is blind to it.
+      assert.equal(
+        git(['status', '--porcelain'], UPSTREAM_DIR),
+        '',
+        'the probe must be invisible to git status, or this test proves nothing',
+      )
+      const found = upstreamGeneratedLines()
+      assert.ok(
+        found.some((line) => line.includes('dsh-ppt-test-probe')),
+        `the probe must be detected, got: ${JSON.stringify(found)}`,
+      )
+    } finally {
+      rmSync(probe, { recursive: true, force: true })
+    }
+    assert.deepEqual(upstreamGeneratedLines(), [], 'the probe must be cleaned up')
   })
 })
 

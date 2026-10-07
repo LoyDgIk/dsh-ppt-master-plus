@@ -193,9 +193,33 @@ export function runtimePreamble(paths) {
     `| this plugin's root | \`${packageDir}\` |`,
     '',
     'Rule: **never write into the upstream checkout.** It is a pristine git',
-    'submodule; anything written there is a local modification that blocks the',
-    'next upstream sync. All generated artifacts belong in the deck project',
-    'workspace, and all of this plugin\u2019s own files live under the plugin root.',
+    'submodule; anything written there blocks the next upstream sync. All',
+    'generated artifacts belong in the deck project workspace, and all of this',
+    "plugin's own files live under the plugin root.",
+    '',
+    '### Deck projects — always pass `--dir`',
+    '',
+    'Upstream decides where a new deck project goes from its own location:',
+    '`project_management/paths.py` sets `PROJECTS_ROOT = REPO_ROOT / "projects"`,',
+    'which resolves **inside the upstream checkout**, and there is no environment',
+    'variable to redirect it. Running the initializer plainly therefore writes a',
+    'deck into the read-only tree.',
+    '',
+    'Worse, upstream gitignores `projects/*`, so what it writes there is invisible',
+    'to `git status` — "no local modifications" does not mean "nothing was',
+    'written".',
+    '',
+    'The `init` subcommand takes `--dir`, which is the supported way out. Always',
+    'pass it, pointing at the workspace you are actually working in:',
+    '',
+    '```bash',
+    `python3 "${join(upstreamSkillDir, 'scripts')}/project_manager.py" init <name> --dir <workspace>/ppt-decks`,
+    '```',
+    '',
+    'Every other upstream subcommand takes an explicit project path, so once the',
+    'project exists outside the checkout, nothing else needs redirecting. If a',
+    'project has already been created inside the upstream tree, move it out —',
+    '`npm run upstream:verify` reports it.',
   ].join('\n')
 }
 
@@ -229,6 +253,74 @@ export function apply(ctx) {
   }))
 
   registerMineruShellEnv(ctx)
+  registerDeckProjectsPrompt(ctx, upstreamDir)
+}
+
+// ─── deck project guardrail ─────────────────────────────────────────────
+
+/** Prompt section name. Namespaced so it cannot collide with another plugin's. */
+export const PROMPT_SECTION = 'dsh-ppt-master-plus:deck-projects'
+
+/**
+ * Sort order for the section. DSH orders sections numerically and at least one
+ * shipped plugin uses 500, so this sits just after that.
+ */
+export const PROMPT_SECTION_ORDER = 620
+
+/**
+ * Tell every model step where deck projects may be created.
+ *
+ * Why a system-prompt section rather than only a skill note: upstream's own
+ * skill is registered **verbatim**, so this plugin's runtime preamble — which
+ * carries the same warning — never reaches a run that loads `ppt-master` alone.
+ * That is the common case for a plain deck, and it is exactly the case that
+ * writes into the read-only checkout.
+ *
+ * The hazard is specific and easy to miss. Upstream derives its projects root
+ * from its own location (`PROJECTS_ROOT = REPO_ROOT / "projects"`), there is no
+ * environment variable to redirect it, and upstream gitignores `projects/*` —
+ * so the generated deck leaves `git status` clean and nothing looks wrong until
+ * someone reads the directory.
+ *
+ * Kept to four lines: a prompt section is not free space, and the full
+ * explanation belongs in the docs.
+ *
+ * @param ctx - the Cordis context.
+ * @param upstreamDir - the upstream checkout that must stay clean.
+ */
+export function registerDeckProjectsPrompt(ctx, upstreamDir) {
+  const systemPrompt = typeof ctx.get === 'function' ? ctx.get('systemPrompt') : undefined
+  if (systemPrompt === undefined || typeof systemPrompt.section !== 'function') {
+    return // optional: the guardrail in verify/sync still applies
+  }
+
+  const script = join(upstreamDir, 'skills', 'ppt-master', 'scripts', 'project_manager.py')
+  const text = [
+    '## Deck projects',
+    '',
+    `Never create a deck inside the ppt-master reference checkout (${upstreamDir}).`,
+    'Its initializer defaults to its own `projects/` directory, which is gitignored —',
+    'so a deck written there is invisible to `git status` and breaks the checkout.',
+    'Always pass a destination:',
+    '',
+    '```bash',
+    `python3 "${script}" init <name> --dir <workspace>/ppt-decks`,
+    '```',
+  ].join('\n')
+
+  try {
+    // Call through the resolved local, not `ctx.systemPrompt`: the service is
+    // not in this plugin's `inject` list, so the property form would silently
+    // do nothing while the accessor above found it perfectly well.
+    systemPrompt.section({
+      name: PROMPT_SECTION,
+      order: PROMPT_SECTION_ORDER,
+      text,
+    })
+  } catch (error) {
+    // A prompt section is a courtesy; it must never stop the plugin loading.
+    console.error(`[${PROVIDER_NAME}] prompt section registration skipped: ${error}`)
+  }
 }
 
 // ─── MinerU credential bridge ───────────────────────────────────────────

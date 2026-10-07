@@ -167,6 +167,30 @@ export function upstreamDirtyLines() {
 }
 
 /**
+ * Generated files sitting inside the upstream checkout that git ignores.
+ *
+ * `upstreamDirtyLines` cannot see these, and that is the whole problem: upstream
+ * gitignores `projects/*` (`!.gitignore`, `projects/*`, `!projects/README.md`),
+ * so a deck created by its initializer leaves `git status` completely clean.
+ * "No local modifications" was reporting a pristine checkout while a project sat
+ * inside it.
+ *
+ * `git clean -ndX` lists exactly the ignored paths that exist, which is the
+ * question actually being asked: *was anything written here?*
+ *
+ * @returns the paths, relative to the checkout; empty means nothing generated.
+ */
+export function upstreamGeneratedLines() {
+  if (!upstreamPopulated()) return []
+  const result = run('git', ['clean', '-ndX', '--', 'projects'], { cwd: UPSTREAM_DIR })
+  if (!result.ok) return []
+  return result.stdout
+    .split('\n')
+    .map((line) => line.replace(/^Would remove /, '').trim())
+    .filter((line) => line !== '')
+}
+
+/**
  * Ensure the submodule registration exists in the parent repo.
  *
  * `git submodule add` records the URL in `.gitmodules` and creates the gitlink
@@ -430,6 +454,20 @@ export function cmdSync(opts = {}) {
     return 1
   }
 
+  // Gitignored output counts too. Upstream ignores projects/*, so a deck created
+  // by its initializer is invisible to `git status` and would be carried along
+  // by the sync unnoticed — or wiped by any later `git clean`.
+  const generated = upstreamGeneratedLines()
+  if (generated.length > 0) {
+    console.error('[upstream] refusing to sync: generated files are inside the upstream checkout.')
+    for (const line of generated.slice(0, 20)) console.error(`  ${line}`)
+    console.error('')
+    console.error('Move them into your own workspace first, then re-run. The')
+    console.error('initializer defaults to its own projects/ directory — pass')
+    console.error('`--dir <workspace>/ppt-decks` to keep new decks out of the checkout.')
+    return 1
+  }
+
   if (!upstreamPopulated()) {
     const code = cmdInit()
     if (code !== 0) return code
@@ -519,6 +557,26 @@ export function cmdVerify() {
     failed = true
   } else {
     console.log('[upstream] ok: no local modifications')
+  }
+
+  // Tracked cleanliness is not the same question as "was anything written
+  // here": upstream gitignores projects/*, so a deck created by its initializer
+  // leaves `git status` clean. Check the ignored paths too.
+  const generated = upstreamGeneratedLines()
+  if (generated.length > 0) {
+    console.error(
+      `[upstream] FAIL: ${generated.length} generated path(s) inside the upstream checkout ` +
+        '(invisible to git status because upstream ignores them):',
+    )
+    for (const line of generated.slice(0, 20)) console.error(`  ${line}`)
+    console.error('')
+    console.error('Move them into your own workspace — upstream is a read-only reference.')
+    console.error('The initializer wrote there because it defaults to its own projects/')
+    console.error('directory; pass `--dir <workspace>/ppt-decks` next time:')
+    console.error(`  mv "${join(UPSTREAM_DIR, 'projects', '<name>')}" <workspace>/ppt-decks/`)
+    failed = true
+  } else {
+    console.log('[upstream] ok: nothing generated inside the checkout')
   }
 
   // Nothing tracked by the parent may live inside the submodule path.
